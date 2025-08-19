@@ -1,3 +1,6 @@
+[![CI](https://github.com/cmendl/gausslectronitegrate/actions/workflows/ci.yml/badge.svg)](https://github.com/cmendl/gausslectronitegrate/actions/workflows/ci.yml)
+
+
 Gausslectronitegrate
 ====================
 
