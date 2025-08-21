@@ -15,6 +15,7 @@ struct test
 
 
 char* test_nuclear_integrals();
+char* test_eri_integrals();
 
 
 #define TEST_FUNCTION_ENTRY(fname) { .func = fname, .name = #fname }
@@ -30,6 +31,7 @@ int main()
 
 	struct test tests[] = {
 		TEST_FUNCTION_ENTRY(test_nuclear_integrals),
+		TEST_FUNCTION_ENTRY(test_eri_integrals),
 	};
 	int num_tests = sizeof(tests) / sizeof(tests[0]);
 

@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
-#include <assert.h>
 #include "nuclear_integrals.h"
+#include "gausslet_factors.h"
 #include "aligned_memory.h"
 #include "util.h"
 
@@ -26,108 +26,6 @@ static double gaussian_nuclear_integral_3d(const double w, const double dist)
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Temporary structure storing pre-computed products of Gausslet coefficients
-/// and Gaussian factors for evaluating nuclear overlap integrals.
-///
-struct nuclear_gausslet_factors
-{
-	double** factors;       //!< Gaussian factors: factors[i] stores the factors for shift index 'i'
-	struct range* indices;  //!< logical indices, for each shift
-	struct range shifts;    //!< shifts
-};
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Pre-compute products of Gausslet coefficients and Gaussian factors for evaluating nuclear overlap integrals.
-///
-static void compute_nuclear_gausslet_factors(const struct gausslet_data* gdata, const struct range* shifts, const double tol, struct nuclear_gausslet_factors* ngf)
-{
-	// copy shifts
-	ngf->shifts = *shifts;
-
-	// factor indices: [2 * "smallest Gausslet index", 2 * "largest Gausslet index"]
-	assert(gdata->indices.istart < 0);
-	assert(gdata->indices.istart + gdata->indices.num - 1 > 0);
-	const struct range all_indices = {
-		.istart = 2 * gdata->indices.istart,
-		.num    = 2 * gdata->indices.num - 1,
-	};
-
-	ngf->factors = aligned_calloc(ngf->shifts.num * sizeof(ngf->factors[0]));
-	ngf->indices = aligned_calloc(ngf->shifts.num * sizeof(ngf->indices[0]));
-
-	for (long k = 0; k < ngf->shifts.num; ++k)
-	{
-		const long shift = ngf->shifts.istart + k;
-
-		double* all_factors = aligned_calloc(all_indices.num * sizeof(all_factors[0]));
-
-		for (long i = 0; i < gdata->indices.num; ++i)
-		{
-			const double coeff_a = gdata->coefficients[i];
-
-			for (long j = 0; j < gdata->indices.num; ++j)
-			{
-				const double coeff_b = gdata->coefficients[j];
-
-				// using that all_indices.istart == 2 * gdata->indices.istart
-				const long idx = i + j;
-				assert(idx < all_indices.num);
-				all_factors[idx] += coeff_a * coeff_b * exp(-square(0.5 * (3*shift + (i - j))));
-			}
-		}
-
-		// filter out small factors
-		long min_index = -1;
-		for (long m = 0; m < all_indices.num; ++m) {
-			if (fabs(all_factors[m]) > tol) {
-				min_index = m;
-				break;
-			}
-		}
-		long max_index = -1;
-		for (long m = all_indices.num - 1; m >= 0; --m) {
-			if (fabs(all_factors[m]) > tol) {
-				max_index = m;
-				break;
-			}
-		}
-		if (min_index != -1)
-		{
-			assert(max_index != -1);
-			assert(min_index <= max_index);
-
-			ngf->indices[k].istart = all_indices.istart + min_index;
-			ngf->indices[k].num = max_index - min_index + 1;
-
-			ngf->factors[k] = aligned_malloc(ngf->indices[k].num * sizeof(ngf->factors[k][0]));
-			memcpy(ngf->factors[k], &all_factors[min_index], ngf->indices[k].num * sizeof(ngf->factors[k][0]));
-		}
-
-		aligned_free(all_factors);
-	}
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Delete Gausslet coefficients and Gaussian factors structure (free memory).
-///
-static void delete_nuclear_gausslet_factors(struct nuclear_gausslet_factors* ngf)
-{
-	for (long i = 0; i < ngf->shifts.num; ++i) {
-		if (ngf->factors[i] != NULL) {
-			aligned_free(ngf->factors[i]);
-		}
-	}
-	aligned_free(ngf->factors);
-	aligned_free(ngf->indices);
-}
-
-
-//________________________________________________________________________________________________________________________
-///
 /// \brief Evaluate the nuclear overlap integrals for two Gausslet orbitals
 /// with coordinates at integer `centers`.
 ///
@@ -145,7 +43,7 @@ void compute_nuclear_gausslet_integrals(
 
 	const double prefac = cubic_power(sqrt(M_PI) / 3.);
 
-	struct nuclear_gausslet_factors ngf;
+	struct gausslet_factors gf;
 	{
 		const long max_range = lmax(lmax(
 			grid->coord_range[0].num,
@@ -155,11 +53,11 @@ void compute_nuclear_gausslet_integrals(
 
 		// unique shifts
 		const struct range shifts = {
-			.istart = -max_range,
-			.num    = 2 * max_range + 1,
+			.istart = -max_range + 1,
+			.num    = 2 * max_range - 1,
 		};
 
-		compute_nuclear_gausslet_factors(gdata, &shifts, tol, &ngf);
+		compute_gausslet_factors(gdata, &shifts, tol, &gf);
 	}
 
 	const long num_points = cartesian_grid_3d_num_points(grid);
@@ -171,10 +69,10 @@ void compute_nuclear_gausslet_integrals(
 		{
 			const double center_x = grid->coord_range[0].istart + 0.5 * (icx + jcx);
 
-			const long idx_shift_x  = (icx - jcx) - ngf.shifts.istart;
-			const double* factors_x = ngf.factors[idx_shift_x];
-			const long istart_x     = ngf.indices[idx_shift_x].istart;
-			const long num_x        = ngf.indices[idx_shift_x].num;
+			const long ishift_x     = (icx - jcx) - gf.shifts.istart;
+			const double* factors_x = gf.factors[ishift_x];
+			const long istart_x     = gf.indices[ishift_x].istart;
+			const long num_x        = gf.indices[ishift_x].num;
 
 			for (long icy = 0; icy < grid->coord_range[1].num; ++icy)
 			{
@@ -182,10 +80,10 @@ void compute_nuclear_gausslet_integrals(
 				{
 					const double center_y = grid->coord_range[1].istart + 0.5 * (icy + jcy);
 
-					const long idx_shift_y  = (icy - jcy) - ngf.shifts.istart;
-					const double* factors_y = ngf.factors[idx_shift_y];
-					const long istart_y     = ngf.indices[idx_shift_y].istart;
-					const long num_y        = ngf.indices[idx_shift_y].num;
+					const long ishift_y     = (icy - jcy) - gf.shifts.istart;
+					const double* factors_y = gf.factors[ishift_y];
+					const long istart_y     = gf.indices[ishift_y].istart;
+					const long num_y        = gf.indices[ishift_y].num;
 
 					for (long icz = 0; icz < grid->coord_range[2].num; ++icz)
 					{
@@ -193,13 +91,18 @@ void compute_nuclear_gausslet_integrals(
 						{
 							const double center_z = grid->coord_range[2].istart + 0.5 * (icz + jcz);
 
-							const long idx_shift_z  = (icz - jcz) - ngf.shifts.istart;
-							const double* factors_z = ngf.factors[idx_shift_z];
-							const long istart_z     = ngf.indices[idx_shift_z].istart;
-							const long num_z        = ngf.indices[idx_shift_z].num;
+							const long ishift_z     = (icz - jcz) - gf.shifts.istart;
+							const double* factors_z = gf.factors[ishift_z];
+							const long istart_z     = gf.indices[ishift_z].istart;
+							const long num_z        = gf.indices[ishift_z].num;
 
 							const long idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
 							const long idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
+
+							// use symmetry to avoid redundant calculations
+							if (idx_i > idx_j) {
+								continue;
+							}
 
 							double val = 0;
 							for (long sx = 0; sx < num_x; ++sx)
@@ -252,7 +155,14 @@ void compute_nuclear_gausslet_integrals(
 		}
 	}
 
-	delete_nuclear_gausslet_factors(&ngf);
+	// fill entries in lower triangular part according to symmetry
+	for (long idx_i = 0; idx_i < num_points; ++idx_i) {
+		for (long idx_j = 0; idx_j < idx_i; ++idx_j) {
+			ngi->integral_values[idx_i * num_points + idx_j] = ngi->integral_values[idx_j * num_points + idx_i];
+		}
+	}
+
+	delete_gausslet_factors(&gf);
 }
 
 
