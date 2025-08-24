@@ -7,6 +7,21 @@ Gausslectronitegrate
 Computing kinetic, nuclear and electron repulsion integrals for Gausslet orbitals.
 
 
+Building
+--------
+The code requires a C compiler, cmake and the HDF5 development library. These can be installed via 
+- `sudo apt install build-essential libhdf5-dev` (on Ubuntu Linux)
+- `brew install hdf5` (on Apple macOS)
+
+From the project directory, run the following commands in a terminal to build the project:
+```bash
+mkdir build_gli && cd build_gli
+cmake ../
+cmake --build .
+```
+Currently, this will compile the unit tests, which you can run via `./gausslectronitegrate_test`, as well as a performance demo example.
+
+
 References
 ----------
 - Steven R. White  
