@@ -168,6 +168,7 @@ void compute_eri_gausslet_integrals(
 	const long lcy = -eri->grid_trans.coord_range[1].istart;
 	const long lcz = -eri->grid_trans.coord_range[2].istart;
 
+	#pragma omp parallel for schedule(dynamic) collapse(2)
 	for (long icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
 	{
 		for (long jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
@@ -295,6 +296,7 @@ void compute_eri_gausslet_integrals(
 	}
 
 	// fill omitted entries according to symmetries
+	#pragma omp parallel for schedule(dynamic) collapse(2)
 	for (long icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
 	{
 		for (long jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
@@ -420,6 +422,7 @@ void reconstruct_full_eri_tensor(const struct eri_gausslet_integrals* eri, doubl
 	const long num_points       = cartesian_grid_3d_num_points(&eri->grid);
 	const long num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
 
+	#pragma omp parallel for collapse(12)
 	for (long icx = 0; icx < eri->grid.coord_range[0].num; ++icx)
 	{
 		for (long jcx = 0; jcx < eri->grid.coord_range[0].num; ++jcx)

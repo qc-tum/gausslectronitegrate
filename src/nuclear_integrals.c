@@ -63,6 +63,7 @@ void compute_nuclear_gausslet_integrals(
 	const long num_points = cartesian_grid_3d_num_points(grid);
 	ngi->integral_values = aligned_calloc(num_points * num_points * sizeof(ngi->integral_values[0]));
 
+	#pragma omp parallel for schedule(dynamic) collapse(2)
 	for (long icx = 0; icx < grid->coord_range[0].num; ++icx)
 	{
 		for (long jcx = 0; jcx < grid->coord_range[0].num; ++jcx)
@@ -156,6 +157,7 @@ void compute_nuclear_gausslet_integrals(
 	}
 
 	// fill entries in lower triangular part according to symmetry
+	#pragma omp parallel for schedule(dynamic)
 	for (long idx_i = 0; idx_i < num_points; ++idx_i) {
 		for (long idx_j = 0; idx_j < idx_i; ++idx_j) {
 			ngi->integral_values[idx_i * num_points + idx_j] = ngi->integral_values[idx_j * num_points + idx_i];
