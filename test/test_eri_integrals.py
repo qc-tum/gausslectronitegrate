@@ -1,7 +1,7 @@
 import numpy as np
 import h5py
 from gausslectronic import (
-    get_gausslet_g4_coeffs,
+    get_gausslet_g10_coeffs,
     eri_gausslet_integrals)
 
 
@@ -68,7 +68,7 @@ def compute_eri_integrals(gauss_coeffs, coeff_indices, centers_list, tol: float)
 def eri_integrals_data():
 
     # Gausslet coefficients
-    b4_list, j4_list = get_gausslet_g4_coeffs()
+    b_list, j_list = get_gausslet_g10_coeffs()
 
     # grid points
     centers_list = [(x, y, z) for x in range(-1, 1) for y in range(0, 2) for z in range(-1, 2)]
@@ -76,10 +76,10 @@ def eri_integrals_data():
     # set truncation tolerance to an artificially high value
     tol = 0.001
 
-    eri = compute_eri_integrals(b4_list, j4_list, centers_list, tol)
+    eri = compute_eri_integrals(b_list, j_list, centers_list, tol)
 
     with h5py.File("data/test_eri_integrals.hdf5", "w") as file:
-        file.attrs["gausslet_coeffs"] = b4_list
+        file.attrs["gausslet_coeffs"] = b_list
         file.attrs["tol"] = tol
         file["eri"] = eri
 

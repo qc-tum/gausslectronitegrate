@@ -1,14 +1,14 @@
 import numpy as np
 import h5py
 from gausslectronic import (
-    get_gausslet_g4_coeffs,
+    get_gausslet_g10_coeffs,
     nuclear_gausslet_integrals)
 
 
 def nuclear_integrals_data():
 
     # Gausslet coefficients
-    b4_list, j4_list = get_gausslet_g4_coeffs()
+    b_list, j_list = get_gausslet_g10_coeffs()
 
     # grid points
     centers_list = [(x, y, z) for x in range(0, 2) for y in range(2, 4) for z in range(-1, 2)]
@@ -23,7 +23,7 @@ def nuclear_integrals_data():
     # set truncation tolerance to an artificially high value
     tol = 0.003
 
-    ngi_list = [nuclear_gausslet_integrals(b4_list, j4_list, center_pairs, pos, tol=tol)
+    ngi_list = [nuclear_gausslet_integrals(b_list, j_list, center_pairs, pos, tol=tol)
            for pos in nuclear_pos]
     ngi = np.zeros(2 * (len(centers_list),))
     for i, ci in enumerate(centers_list):
@@ -31,7 +31,7 @@ def nuclear_integrals_data():
             ngi[i, j] = sum(z * ngi_list[k][(ci, cj)] for k, z in enumerate(nuclear_charge))
 
     with h5py.File("data/test_nuclear_integrals.hdf5", "w") as file:
-        file.attrs["gausslet_coeffs"] = b4_list
+        file.attrs["gausslet_coeffs"] = b_list
         file.attrs["num_nuclei"]      = len(nuclear_pos)
         for i in range(len(nuclear_pos)):
             file.attrs[f"nuclear_pos_{i}"]    = nuclear_pos[i]
