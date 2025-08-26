@@ -26,8 +26,7 @@ static double gaussian_nuclear_integral_3d(const double w, const double dist)
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Evaluate the nuclear overlap integrals for two Gausslet orbitals
-/// with coordinates at integer `centers`.
+/// \brief Evaluate the nuclear overlap integrals for Gausslet orbitals and the specified nuclear positions.
 ///
 void compute_nuclear_gausslet_integrals(
 	const struct gausslet_data* gdata, const struct cartesian_grid_3d* grid,

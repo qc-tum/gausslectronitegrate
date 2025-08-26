@@ -6,6 +6,7 @@ project(gausslectronitegrate LANGUAGES C)
 include(CTest)
 
 find_package(HDF5 REQUIRED COMPONENTS C)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
 find_package(OpenMP)
 
 set(CMAKE_C_FLAGS_DEBUG "-g -Wall -Wextra")
@@ -22,6 +23,14 @@ if (OpenMP_C_FOUND)
     target_link_libraries( gausslectronitegrate_test PRIVATE OpenMP::OpenMP_C)
 endif()
 
+add_library(               gausslectronitegrate_pymodule SHARED ${GAUSSLECTRONITEGRATE_SOURCES} "python/pymodule.c")
+target_include_directories(gausslectronitegrate_pymodule PRIVATE ${GAUSSLECTRONITEGRATE_DIRS} ${HDF5_INCLUDE_DIRS} ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
+target_link_libraries(     gausslectronitegrate_pymodule PRIVATE ${HDF5_LIBRARIES} ${Python3_LIBRARIES} Python3::NumPy)
+if (OpenMP_C_FOUND)
+    target_link_libraries( gausslectronitegrate_pymodule PRIVATE OpenMP::OpenMP_C)
+endif()
+set_target_properties(     gausslectronitegrate_pymodule PROPERTIES PREFIX "" OUTPUT_NAME "gausslectronitegrate_pymodule" LINKER_LANGUAGE C)
+
 add_executable(            perf_eri_integrals ${GAUSSLECTRONITEGRATE_SOURCES} "perf/perf_eri_integrals.c")
 target_include_directories(perf_eri_integrals PRIVATE ${GAUSSLECTRONITEGRATE_DIRS} ${HDF5_INCLUDE_DIRS})
 target_link_libraries(     perf_eri_integrals PRIVATE m ${HDF5_LIBRARIES})
@@ -30,3 +39,5 @@ if (OpenMP_C_FOUND)
 endif()
 
 add_test(NAME gausslectronitegrate_test COMMAND gausslectronitegrate_test)
+
+install(TARGETS gausslectronitegrate_pymodule DESTINATION .)

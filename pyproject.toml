@@ -1,0 +1,33 @@
+[project]
+name = "gausslectronitegrate"
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [{ name = "Christian B. Mendl", email = "christian.b.mendl@gmail.com" }]
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+]
+dynamic = ["version"]
+
+[project.urls]
+homepage = "https://github.com/cmendl/gausslectronitegrate"
+repository = "https://github.com/cmendl/gausslectronitegrate"
+issues = "https://github.com/cmendl/gausslectronitegrate/issues"
+
+[build-system]
+requires = [
+    "scikit-build-core",
+    "setuptools-scm",
+    "numpy",
+]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+sdist.include = ["python/gausslectronitegrate/_version.py"]
+build.targets = ["gausslectronitegrate_pymodule"]
+build.verbose = true
+wheel.install-dir = "gausslectronitegrate"
+
+[tool.setuptools_scm]
+write_to = "python/gausslectronitegrate/_version.py"

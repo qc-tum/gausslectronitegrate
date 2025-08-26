@@ -76,7 +76,7 @@ int main()
 		-eri.grid_trans.coord_range[0].istart,
 		-eri.grid_trans.coord_range[1].istart,
 		-eri.grid_trans.coord_range[2].istart);
-	printf("ERI for all Gausslets at origin: %.15g\n", eri.integral_values[(iorigin * num_points_trans + iorigin) * num_points_trans + iorigin]);
+	printf("ERI for all Gausslets at origin: %.17g\n", eri.integral_values[(iorigin * num_points_trans + iorigin) * num_points_trans + iorigin]);
 
 	printf("wall clock time: %g seconds\n", (tick_end - tick_start) / ticks_per_sec);
 
