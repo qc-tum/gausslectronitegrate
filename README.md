@@ -4,14 +4,14 @@
 Gausslectronitegrate
 ====================
 
-Computing kinetic, nuclear and electron repulsion integrals for Gausslet orbitals.
+Computing kinetic, nuclear, and electron repulsion integrals for Gausslet orbitals.
 
 
 Building
 --------
-The code requires a C compiler, cmake and the HDF5 development library. These can be installed via 
-- `sudo apt install build-essential libhdf5-dev` (on Ubuntu Linux)
-- `brew install hdf5` (on Apple macOS)
+The code requires a C compiler, CMake, and the HDF5 and Python 3 development libraries with NumPy. These can be installed via 
+- `sudo apt install build-essential libhdf5-dev python3-dev python3-numpy` (on Ubuntu Linux or similar)
+- `brew install hdf5 python3 numpy` (on Apple macOS)
 
 From the project directory, run the following commands in a terminal to build the project:
 ```bash
@@ -19,7 +19,14 @@ mkdir build_gli && cd build_gli
 cmake ../
 cmake --build .
 ```
-Currently, this will compile the unit tests, which you can run via `./gausslectronitegrate_test`, as well as a performance demo example.
+Currently, this will compile the unit tests, which you can run via `./gausslectronitegrate_test`, a performance benchmark demo, and the Python module library.
+
+To build the corresponding Python package directly, ensure that the Python [build](https://pypi.org/project/build/) tool is installed, and run
+```bash
+python3 -m build . --wheel
+pip3 install dist/gausslectronitegrate-...whl
+```
+The first line should run `cmake` in the background and create a Python "wheel" (.whl file) in the `dist/` subfolder. This package file can then be installed locally via the second line.
 
 
 References
