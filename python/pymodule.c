@@ -5,6 +5,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include "kinetic_integrals.h"
 #include "nuclear_integrals.h"
 #include "eri_integrals.h"
 #include "aligned_memory.h"
@@ -282,6 +283,56 @@ static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObje
 }
 
 
+static PyObject* Py_compute_kinetic_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
+{
+	const char* syntax = "compute_kinetic_gausslet_integrals(gausslet_coeffs, grid)";
+
+	PyObject* py_gausslet_coeffs;
+	PyObject* py_grid;
+
+	// parse input arguments
+	if (!PyArg_ParseTuple(args, "OO", &py_gausslet_coeffs, &py_grid)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// Gausslet coefficients
+	struct gausslet_data gdata;
+	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
+		return NULL;
+	}
+
+	// grid specification
+	struct cartesian_grid_3d grid;
+	if (parse_cartesian_grid(py_grid, syntax, &grid) < 0) {
+		return NULL;
+	}
+
+	// compute kinetic overlap integrals
+	struct kinetic_gausslet_integrals kgi;
+	compute_kinetic_gausslet_integrals(&gdata, &grid, &kgi);
+
+	// create NumPy array of degree 2 containing integral values (return value)
+	const long num_points = cartesian_grid_3d_num_points(&grid);
+	npy_intp dims[2] = { num_points, num_points };
+	PyArrayObject* py_integral_values = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+	if (py_integral_values == NULL) {
+		char msg[1024];
+		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
+		PyErr_SetString(PyExc_RuntimeError, msg);
+		return NULL;
+	}
+	memcpy(PyArray_DATA(py_integral_values), kgi.integral_values, num_points * num_points * sizeof(kgi.integral_values[0]));
+
+	delete_kinetic_gausslet_integrals(&kgi);
+	aligned_free(gdata.coefficients);
+
+	return (PyObject*)py_integral_values;
+}
+
+
 static PyObject* Py_compute_nuclear_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
 {
 	const char* syntax = "compute_nuclear_gausslet_integrals(gausslet_coeffs, grid, nuclear_positions, nuclear_charges, tol)";
@@ -442,6 +493,12 @@ static PyMethodDef methods[] = {
 		.ml_meth  = Py_grid_point_to_linear_index,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Convert a Cartesian grid point to a linear index.",
+	},
+	{
+		.ml_name  = "compute_kinetic_gausslet_integrals",
+		.ml_meth  = Py_compute_kinetic_gausslet_integrals,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Evaluate the kinetic overlap integrals for Gausslet orbitals.",
 	},
 	{
 		.ml_name  = "compute_nuclear_gausslet_integrals",

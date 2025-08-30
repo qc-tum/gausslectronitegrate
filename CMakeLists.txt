@@ -13,8 +13,8 @@ set(CMAKE_C_FLAGS_DEBUG "-g -Wall -Wextra")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -Wextra")
 
 set(GAUSSLECTRONITEGRATE_DIRS "src")
-set(GAUSSLECTRONITEGRATE_SOURCES "src/gausslet_factors.c" "src/nuclear_integrals.c" "src/eri_integrals.c" "src/hdf5_util.c" "src/timing.c")
-set(TEST_SOURCES "test/test_nuclear_integrals.c" "test/test_eri_integrals.c" "test/run_tests.c")
+set(GAUSSLECTRONITEGRATE_SOURCES "src/gausslet_factors.c" "src/kinetic_integrals.c" "src/nuclear_integrals.c" "src/eri_integrals.c" "src/hdf5_util.c" "src/timing.c")
+set(TEST_SOURCES "test/test_kinetic_integrals.c" "test/test_nuclear_integrals.c" "test/test_eri_integrals.c" "test/run_tests.c")
 
 add_executable(            gausslectronitegrate_test ${GAUSSLECTRONITEGRATE_SOURCES} ${TEST_SOURCES})
 target_include_directories(gausslectronitegrate_test PRIVATE ${GAUSSLECTRONITEGRATE_DIRS} ${HDF5_INCLUDE_DIRS})

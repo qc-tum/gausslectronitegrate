@@ -14,6 +14,7 @@ struct test
 };
 
 
+char* test_kinetic_integrals();
 char* test_nuclear_integrals();
 char* test_eri_integrals();
 
@@ -30,6 +31,7 @@ int main()
 	#endif
 
 	struct test tests[] = {
+		TEST_FUNCTION_ENTRY(test_kinetic_integrals),
 		TEST_FUNCTION_ENTRY(test_nuclear_integrals),
 		TEST_FUNCTION_ENTRY(test_eri_integrals),
 	};
