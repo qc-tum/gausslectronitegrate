@@ -467,6 +467,59 @@ static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), Py
 }
 
 
+static PyObject* Py_compute_full_eri_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
+{
+	const char* syntax = "compute_full_eri_gausslet_integrals(gausslet_coeffs, grid, tol)";
+
+	PyObject* py_gausslet_coeffs;
+	PyObject* py_grid;
+	double tol;
+
+	// parse input arguments
+	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid, &tol)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// Gausslet coefficients
+	struct gausslet_data gdata;
+	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
+		return NULL;
+	}
+
+	// grid specification
+	struct cartesian_grid_3d grid;
+	if (parse_cartesian_grid(py_grid, syntax, &grid) < 0) {
+		return NULL;
+	}
+
+	// compute electron repulsion integrals (ERIs), exploiting translational invariance
+	struct eri_gausslet_integrals eri;
+	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
+
+	// create NumPy array of degree 4 to store the full ERI tensor
+	const long num_points = cartesian_grid_3d_num_points(&grid);
+	npy_intp dims[4] = { num_points, num_points, num_points, num_points };
+	PyArrayObject* py_full_tensor = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
+	if (py_full_tensor == NULL) {
+		char msg[1024];
+		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
+		PyErr_SetString(PyExc_RuntimeError, msg);
+		return NULL;
+	}
+
+	// reconstruct full tensor
+	reconstruct_full_eri_tensor(&eri, PyArray_DATA(py_full_tensor));
+
+	delete_eri_gausslet_integrals(&eri);
+	aligned_free(gdata.coefficients);
+
+	return (PyObject*)py_full_tensor;
+}
+
+
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Get the maximum number of OpenMP threads, or 0 if OpenMP is not available.
@@ -511,6 +564,12 @@ static PyMethodDef methods[] = {
 		.ml_meth  = Py_compute_eri_gausslet_integrals,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals, exploiting translational invariance by subtracting the last orbital center",
+	},
+	{
+		.ml_name  = "compute_full_eri_gausslet_integrals",
+		.ml_meth  = Py_compute_full_eri_gausslet_integrals,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Evaluate the full electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals",
 	},
 	{
 		.ml_name  = "get_max_openmp_threads",

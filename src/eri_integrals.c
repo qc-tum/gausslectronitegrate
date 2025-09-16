@@ -455,12 +455,32 @@ void reconstruct_full_eri_tensor(const struct eri_gausslet_integrals* eri, doubl
 													const long idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx, kcy, kcz);
 													const long idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx, lcy, lcz);
 
+													if (idx_i < idx_j) {
+														continue;
+													}
+													if (idx_k < idx_l) {
+														continue;
+													}
+													if ((idx_i < idx_k) || (idx_i == idx_k && idx_j < idx_l)) {
+														continue;
+													}
+
 													const long idx_il = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (icx - lcx) - eri->grid_trans.coord_range[0].istart, (icy - lcy) - eri->grid_trans.coord_range[1].istart, (icz - lcz) - eri->grid_trans.coord_range[2].istart);
 													const long idx_jl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (jcx - lcx) - eri->grid_trans.coord_range[0].istart, (jcy - lcy) - eri->grid_trans.coord_range[1].istart, (jcz - lcz) - eri->grid_trans.coord_range[2].istart);
 													const long idx_kl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (kcx - lcx) - eri->grid_trans.coord_range[0].istart, (kcy - lcy) - eri->grid_trans.coord_range[1].istart, (kcz - lcz) - eri->grid_trans.coord_range[2].istart);
 
-													full_tensor[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l]
-														= eri->integral_values[(idx_il * num_points_trans + idx_jl) * num_points_trans + idx_kl];
+													const double val = eri->integral_values[(idx_il * num_points_trans + idx_jl) * num_points_trans + idx_kl];
+
+													// explicitly impose symmetries
+													full_tensor[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l] = val;
+													full_tensor[((idx_j * num_points + idx_i) * num_points + idx_k) * num_points + idx_l] = val;  // i <-> j
+													full_tensor[((idx_i * num_points + idx_j) * num_points + idx_l) * num_points + idx_k] = val;  // k <-> l
+													full_tensor[((idx_j * num_points + idx_i) * num_points + idx_l) * num_points + idx_k] = val;  // i <-> j, k <-> l
+													// analogous version with (i, j) <-> (k, l)
+													full_tensor[((idx_k * num_points + idx_l) * num_points + idx_i) * num_points + idx_j] = val;
+													full_tensor[((idx_l * num_points + idx_k) * num_points + idx_i) * num_points + idx_j] = val;  // k <-> l
+													full_tensor[((idx_k * num_points + idx_l) * num_points + idx_j) * num_points + idx_i] = val;  // i <-> j
+													full_tensor[((idx_l * num_points + idx_k) * num_points + idx_j) * num_points + idx_i] = val;  // i <-> j, k <-> l
 												}
 											}
 										}
