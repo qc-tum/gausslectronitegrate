@@ -43,13 +43,13 @@ if (ENABLE_GAUSSLECTRONITEGRATE_UNIT_TESTS)
 endif()
 
 if (ENABLE_GAUSSLECTRONITEGRATE_PYTHON_MODULE)
-    add_library(               gausslectronitegrate_pymodule ${GAUSSLECTRONITEGRATE_SOURCES} "python/pymodule.c")
+    add_library(               gausslectronitegrate_pymodule MODULE ${GAUSSLECTRONITEGRATE_SOURCES} "python/pymodule.c")
     target_include_directories(gausslectronitegrate_pymodule PRIVATE ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
-    target_link_libraries(     gausslectronitegrate_pymodule PRIVATE ${HDF5_LIBRARIES} ${Python3_LIBRARIES} Python3::NumPy)
+    target_link_libraries(     gausslectronitegrate_pymodule PRIVATE ${HDF5_LIBRARIES} Python3::Module Python3::NumPy)
     if (OpenMP_C_FOUND)
         target_link_libraries( gausslectronitegrate_pymodule PRIVATE OpenMP::OpenMP_C)
     endif()
-    set_target_properties(     gausslectronitegrate_pymodule PROPERTIES PREFIX "" SUFFIX ".so" OUTPUT_NAME "gausslectronitegrate_pymodule" LINKER_LANGUAGE C)
+    set_target_properties(     gausslectronitegrate_pymodule PROPERTIES PREFIX "" OUTPUT_NAME "gausslectronitegrate_pymodule" LINKER_LANGUAGE C)
 endif()
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)  # test whether current project is a stand-alone project
