@@ -33,3 +33,16 @@ static inline long cartesian_grid_3d_cartesian_to_linear_index(const struct cart
 {
 	return (ix * grid->coord_range[1].num + iy) * grid->coord_range[2].num + iz;
 }
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Specification of a single Cartesian grid point in three dimensions.
+///
+union cartesian_grid_point_3d
+{
+	struct {
+		long x, y, z;  //!< x, y, z coordinates
+	};
+	long c[3];         //!< array of coordinates
+};

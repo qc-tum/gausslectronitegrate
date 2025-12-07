@@ -100,3 +100,32 @@ void delete_kinetic_gausslet_integrals(struct kinetic_gausslet_integrals* kgi)
 {
 	aligned_free(kgi->integral_values);
 }
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Evaluate a single kinetic overlap integral for Gausslet orbitals located at the specified grid points.
+///
+double compute_kinetic_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[2])
+{
+	const long dx = labs(points[0].x - points[1].x);
+	const long dy = labs(points[0].y - points[1].y);
+	const long dz = labs(points[0].z - points[1].z);
+
+	const long max_range = lmax(lmax(dx, dy), dz) + 1;
+
+	double* kint1d = aligned_malloc(max_range * sizeof(kint1d[0]));
+	for (long shift = 0; shift < max_range; ++shift) {
+		kint1d[shift] = kinetic_gausslet_integral(gdata, shift);
+	}
+
+	// structurally K x I x I + I x K x I + I x I x K
+	const double kgi =
+		kint1d[dx]        * (dy == 0 ? 1 : 0) * (dz == 0 ? 1 : 0) +
+		(dx == 0 ? 1 : 0) * kint1d[dy]        * (dz == 0 ? 1 : 0) +
+		(dx == 0 ? 1 : 0) * (dy == 0 ? 1 : 0) * kint1d[dz];
+
+	aligned_free(kint1d);
+
+	return kgi;
+}

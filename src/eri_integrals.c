@@ -504,3 +504,86 @@ void delete_eri_gausslet_integrals(struct eri_gausslet_integrals* eri)
 {
 	aligned_free(eri->integral_values);
 }
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Evaluate a single electron repulsion integral (ERI) for Gausslet orbitals.
+///
+double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[4], const double tol)
+{
+	const double prefac = cubic_power(M_PI / 9.);
+
+	struct gausslet_factor_products gfp;
+	{
+		const long max_range_01 = lmax(lmax(
+			labs(points[0].x - points[1].x),
+			labs(points[0].y - points[1].y)),
+			labs(points[0].z - points[1].z)) + 1;
+		const long max_range_23 = lmax(lmax(
+			labs(points[2].x - points[3].x),
+			labs(points[2].y - points[3].y)),
+			labs(points[2].z - points[3].z)) + 1;
+		const long max_range = lmax(max_range_01, max_range_23);
+
+		// unique shifts
+		const struct range shifts = {
+			.istart = -max_range + 1,
+			.num    = 2 * max_range - 1,
+		};
+
+		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
+	}
+
+	double center_diff[3];
+	const double* products[3];
+	union cartesian_grid_point_3d istart, num;
+	for (int i = 0; i < 3; ++i)
+	{
+		center_diff[i] = 0.5 * ((points[0].c[i] + points[1].c[i]) - (points[2].c[i] + points[3].c[i]));
+		const long ishift01   = (points[0].c[i] - points[1].c[i]) - gfp.shifts.istart;
+		const long ishift23   = (points[2].c[i] - points[3].c[i]) - gfp.shifts.istart;
+		assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
+		assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
+		const long ishift0123 = ishift01 * gfp.shifts.num + ishift23;
+		products[i] = gfp.products[ishift0123];
+		istart.c[i] = gfp.indices [ishift0123].istart;
+		num.c[i]    = gfp.indices [ishift0123].num;
+	}
+
+	double val = 0;
+	double pt[3];
+	for (long sx = 0; sx < num.x; ++sx)
+	{
+		if (fabs(products[0][sx]) <= tol) {
+			continue;
+		}
+
+		pt[0] = center_diff[0] + (istart.x + sx) / 6.0;
+
+		for (long sy = 0; sy < num.y; ++sy)
+		{
+			if (fabs(products[1][sy]) <= tol) {
+				continue;
+			}
+
+			pt[1] = center_diff[1] + (istart.y + sy) / 6.0;
+
+			for (long sz = 0; sz < num.z; ++sz)
+			{
+				if (fabs(products[2][sz]) <= tol) {
+					continue;
+				}
+
+				pt[2] = center_diff[2] + (istart.z + sz) / 6.0;
+
+				val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
+			}
+		}
+	}
+	val *= prefac;
+
+	delete_gausslet_factor_products(&gfp);
+
+	return val;
+}

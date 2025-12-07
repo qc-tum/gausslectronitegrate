@@ -27,3 +27,10 @@ void reconstruct_full_eri_tensor(const struct eri_gausslet_integrals* eri, doubl
 
 
 void delete_eri_gausslet_integrals(struct eri_gausslet_integrals* eri);
+
+
+//________________________________________________________________________________________________________________________
+//
+
+
+double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[4], const double tol);

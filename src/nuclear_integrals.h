@@ -35,3 +35,12 @@ void compute_nuclear_gausslet_integrals(
 
 
 void delete_nuclear_gausslet_integrals(struct nuclear_gausslet_integrals* ngi);
+
+
+//________________________________________________________________________________________________________________________
+//
+
+
+double compute_nuclear_gausslet_integral(
+	const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[2],
+	const struct atomic_nucleus* nuclei, const int num_nuclei, const double tol);

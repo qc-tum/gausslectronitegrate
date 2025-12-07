@@ -177,3 +177,108 @@ void delete_nuclear_gausslet_integrals(struct nuclear_gausslet_integrals* ngi)
 	aligned_free(ngi->nuclei);
 	ngi->num_nuclei = 0;
 }
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Evaluate a single nuclear overlap integral for Gausslet orbitals and the specified nuclear positions.
+///
+double compute_nuclear_gausslet_integral(
+	const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[2],
+	const struct atomic_nucleus* nuclei, const int num_nuclei, const double tol)
+{
+	const double prefac = cubic_power(sqrt(M_PI) / 3.);
+
+	struct gausslet_factors gf;
+	{
+		const long max_range = lmax(lmax(
+			labs(points[0].x - points[1].x),
+			labs(points[0].y - points[1].y)),
+			labs(points[0].z - points[1].z)) + 1;
+
+		// unique shifts
+		const struct range shifts = {
+			.istart = -max_range + 1,
+			.num    = 2 * max_range - 1,
+		};
+
+		compute_gausslet_factors(gdata, &shifts, tol, &gf);
+	}
+
+	const double center[3] = {
+		0.5 * (points[0].x + points[1].x),
+		0.5 * (points[0].y + points[1].y),
+		0.5 * (points[0].z + points[1].z),
+	};
+
+	const union cartesian_grid_point_3d ishift = {
+		(points[0].x - points[1].x) - gf.shifts.istart,
+		(points[0].y - points[1].y) - gf.shifts.istart,
+		(points[0].z - points[1].z) - gf.shifts.istart,
+	};
+
+	const double* factors[3] = {
+		gf.factors[ishift.x],
+		gf.factors[ishift.y],
+		gf.factors[ishift.z],
+	};
+
+	const union cartesian_grid_point_3d istart = {
+		gf.indices[ishift.x].istart,
+		gf.indices[ishift.y].istart,
+		gf.indices[ishift.z].istart,
+	};
+
+	const union cartesian_grid_point_3d num = {
+		gf.indices[ishift.x].num,
+		gf.indices[ishift.y].num,
+		gf.indices[ishift.z].num,
+	};
+
+	double val = 0;
+	for (long sx = 0; sx < num.x; ++sx)
+	{
+		if (fabs(factors[0][sx]) <= tol) {
+			continue;
+		}
+
+		const double pt_x = center[0] + (istart.x + sx) / 6.0;
+
+		for (long sy = 0; sy < num.y; ++sy)
+		{
+			if (fabs(factors[1][sy]) <= tol) {
+				continue;
+			}
+
+			const double pt_y = center[1] + (istart.y + sy) / 6.0;
+
+			for (long sz = 0; sz < num.z; ++sz)
+			{
+				if (fabs(factors[2][sz]) <= tol) {
+					continue;
+				}
+
+				const double pt_z = center[2] + (istart.z + sz) / 6.0;
+
+				const double factor = factors[0][sx] * factors[1][sy] * factors[2][sz];
+
+				for (int k = 0; k < num_nuclei; ++k)
+				{
+					const double diff[3] = {
+						pt_x - nuclei[k].pos[0],
+						pt_y - nuclei[k].pos[1],
+						pt_z - nuclei[k].pos[2],
+					};
+					const double dist = vec3_norm(diff);
+
+					val += nuclei[k].charge * factor * gaussian_nuclear_integral_3d(1. / 3,  dist);
+				}
+			}
+		}
+	}
+	val *= prefac;
+
+	delete_gausslet_factors(&gf);
+
+	return val;
+}

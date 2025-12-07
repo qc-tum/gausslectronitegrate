@@ -19,3 +19,10 @@ void compute_kinetic_gausslet_integrals(const struct gausslet_data* gdata, const
 
 
 void delete_kinetic_gausslet_integrals(struct kinetic_gausslet_integrals* kgi);
+
+
+//________________________________________________________________________________________________________________________
+//
+
+
+double compute_kinetic_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[2]);
