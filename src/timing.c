@@ -9,7 +9,7 @@
 ///
 /// \brief Get the current time as number of clock ticks.
 ///
-int64_t get_time_ticks()
+int64_t get_time_ticks(void)
 {
 	#ifdef _WIN32
 
@@ -31,7 +31,7 @@ int64_t get_time_ticks()
 ///
 /// \brief Get the performance timer resolution.
 ///
-int64_t get_tick_resolution()
+int64_t get_tick_resolution(void)
 {
 	#ifdef _WIN32
 
