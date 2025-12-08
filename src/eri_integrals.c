@@ -53,34 +53,34 @@ static void compute_gausslet_factor_products(const struct gausslet_data* gdata, 
 	struct gausslet_factors gf;
 	compute_gausslet_factors(gdata, shifts, 0., &gf);
 
-	for (long k = 0; k < shifts->num; ++k)
+	for (glong k = 0; k < shifts->num; ++k)
 	{
-		for (long l = 0; l < shifts->num; ++l)
+		for (glong l = 0; l < shifts->num; ++l)
 		{
 			const struct range all_indices = range_minus(gf.indices[k], gf.indices[l]);
 
 			// convolution
 			double* all_products = aligned_calloc(all_indices.num * sizeof(all_products[0]));
-			for (long i = 0; i < gf.indices[k].num; ++i)
+			for (glong i = 0; i < gf.indices[k].num; ++i)
 			{
-				for (long j = 0; j < gf.indices[l].num; ++j)
+				for (glong j = 0; j < gf.indices[l].num; ++j)
 				{
-					const long idx = (gf.indices[k].istart + i) - (gf.indices[l].istart + j) - all_indices.istart;
+					const glong idx = (gf.indices[k].istart + i) - (gf.indices[l].istart + j) - all_indices.istart;
 					assert(0 <= idx && idx < all_indices.num);
 					all_products[idx] += gf.factors[k][i] * gf.factors[l][j];
 				}
 			}
 
 			// filter out small numbers
-			long min_index = -1;
-			for (long m = 0; m < all_indices.num; ++m) {
+			glong min_index = -1;
+			for (glong m = 0; m < all_indices.num; ++m) {
 				if (fabs(all_products[m]) > tol) {
 					min_index = m;
 					break;
 				}
 			}
-			long max_index = -1;
-			for (long m = all_indices.num - 1; m >= 0; --m) {
+			glong max_index = -1;
+			for (glong m = all_indices.num - 1; m >= 0; --m) {
 				if (fabs(all_products[m]) > tol) {
 					max_index = m;
 					break;
@@ -91,7 +91,7 @@ static void compute_gausslet_factor_products(const struct gausslet_data* gdata, 
 				assert(max_index != -1);
 				assert(min_index <= max_index);
 
-				const long kl = k * shifts->num + l;
+				const glong kl = k * shifts->num + l;
 				gfp->indices[kl].istart = all_indices.istart + min_index;
 				gfp->indices[kl].num = max_index - min_index + 1;
 
@@ -113,7 +113,7 @@ static void compute_gausslet_factor_products(const struct gausslet_data* gdata, 
 ///
 static void delete_gausslet_factor_products(struct gausslet_factor_products* gfp)
 {
-	for (long i = 0; i < gfp->shifts.num * gfp->shifts.num; ++i) {
+	for (glong i = 0; i < gfp->shifts.num * gfp->shifts.num; ++i) {
 		if (gfp->products[i] != NULL) {
 			aligned_free(gfp->products[i]);
 		}
@@ -133,15 +133,15 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 	struct gausslet_factor_products gfp;
 	{
-		const long max_range_01 = lmax(lmax(
+		const glong max_range_01 = lmax(lmax(
 			labs(points[0].x - points[1].x),
 			labs(points[0].y - points[1].y)),
 			labs(points[0].z - points[1].z)) + 1;
-		const long max_range_23 = lmax(lmax(
+		const glong max_range_23 = lmax(lmax(
 			labs(points[2].x - points[3].x),
 			labs(points[2].y - points[3].y)),
 			labs(points[2].z - points[3].z)) + 1;
-		const long max_range = lmax(max_range_01, max_range_23);
+		const glong max_range = lmax(max_range_01, max_range_23);
 
 		// unique shifts
 		const struct range shifts = {
@@ -158,11 +158,11 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 	for (int i = 0; i < 3; ++i)
 	{
 		center_diff[i] = 0.5 * ((points[0].c[i] + points[1].c[i]) - (points[2].c[i] + points[3].c[i]));
-		const long ishift01   = (points[0].c[i] - points[1].c[i]) - gfp.shifts.istart;
-		const long ishift23   = (points[2].c[i] - points[3].c[i]) - gfp.shifts.istart;
+		const glong ishift01  = (points[0].c[i] - points[1].c[i]) - gfp.shifts.istart;
+		const glong ishift23  = (points[2].c[i] - points[3].c[i]) - gfp.shifts.istart;
 		assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
 		assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
-		const long ishift0123 = ishift01 * gfp.shifts.num + ishift23;
+		const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
 		products[i] = gfp.products[ishift0123];
 		istart.c[i] = gfp.indices [ishift0123].istart;
 		num.c[i]    = gfp.indices [ishift0123].num;
@@ -170,7 +170,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 	double val = 0;
 	double pt[3];
-	for (long sx = 0; sx < num.x; ++sx)
+	for (glong sx = 0; sx < num.x; ++sx)
 	{
 		if (fabs(products[0][sx]) <= tol) {
 			continue;
@@ -178,7 +178,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 		pt[0] = center_diff[0] + (istart.x + sx) / 6.0;
 
-		for (long sy = 0; sy < num.y; ++sy)
+		for (glong sy = 0; sy < num.y; ++sy)
 		{
 			if (fabs(products[1][sy]) <= tol) {
 				continue;
@@ -186,7 +186,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 			pt[1] = center_diff[1] + (istart.y + sy) / 6.0;
 
-			for (long sz = 0; sz < num.z; ++sz)
+			for (glong sz = 0; sz < num.z; ++sz)
 			{
 				if (fabs(products[2][sz]) <= tol) {
 					continue;
@@ -228,7 +228,7 @@ void compute_eri_gausslet_integrals(
 
 	struct gausslet_factor_products gfp;
 	{
-		const long max_range = lmax(lmax(
+		const glong max_range = lmax(lmax(
 			grid->coord_range[0].num,
 			grid->coord_range[1].num),
 			grid->coord_range[2].num);
@@ -243,24 +243,24 @@ void compute_eri_gausslet_integrals(
 		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
-	const long num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
+	const glong num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
 	eri->integral_values = aligned_calloc(num_points_trans * num_points_trans * num_points_trans * sizeof(eri->integral_values[0]));
 
 	// index corresponding to logical coordinate zero
-	const long lcx = -eri->grid_trans.coord_range[0].istart;
-	const long lcy = -eri->grid_trans.coord_range[1].istart;
-	const long lcz = -eri->grid_trans.coord_range[2].istart;
+	const glong lcx = -eri->grid_trans.coord_range[0].istart;
+	const glong lcy = -eri->grid_trans.coord_range[1].istart;
+	const glong lcz = -eri->grid_trans.coord_range[2].istart;
 
 	#pragma omp parallel for schedule(dynamic) collapse(2)
-	for (long icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
+	for (glong icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
 	{
-		for (long jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
 		{
 			if (labs(icx - jcx) > grid->coord_range[0].num - 1) {
 				continue;
 			}
 			// use reflection symmetry to avoid redundant calculations
-			for (long kcx = -eri->grid_trans.coord_range[0].istart; kcx < eri->grid_trans.coord_range[0].num; ++kcx)
+			for (glong kcx = -eri->grid_trans.coord_range[0].istart; kcx < eri->grid_trans.coord_range[0].num; ++kcx)
 			{
 				if (labs(icx - kcx) > grid->coord_range[0].num - 1 || labs(jcx - kcx) > grid->coord_range[0].num - 1) {
 					continue;
@@ -268,24 +268,24 @@ void compute_eri_gausslet_integrals(
 
 				const double center_diff_x = 0.5 * ((icx + jcx) - (kcx + lcx));
 
-				const long ishift_ij_x   = (icx - jcx) - gfp.shifts.istart;
-				const long ishift_kl_x   = (kcx - lcx) - gfp.shifts.istart;
+				const glong ishift_ij_x   = (icx - jcx) - gfp.shifts.istart;
+				const glong ishift_kl_x   = (kcx - lcx) - gfp.shifts.istart;
 				assert(0 <= ishift_ij_x && ishift_ij_x < gfp.shifts.num);
 				assert(0 <= ishift_kl_x && ishift_kl_x < gfp.shifts.num);
-				const long ishift_ijkl_x = ishift_ij_x * gfp.shifts.num + ishift_kl_x;
-				const double* products_x = gfp.products[ishift_ijkl_x];
-				const long istart_x      = gfp.indices [ishift_ijkl_x].istart;
-				const long num_x         = gfp.indices [ishift_ijkl_x].num;
+				const glong ishift_ijkl_x = ishift_ij_x * gfp.shifts.num + ishift_kl_x;
+				const double* products_x  = gfp.products[ishift_ijkl_x];
+				const glong istart_x      = gfp.indices [ishift_ijkl_x].istart;
+				const glong num_x         = gfp.indices [ishift_ijkl_x].num;
 
-				for (long icy = 0; icy < eri->grid_trans.coord_range[1].num; ++icy)
+				for (glong icy = 0; icy < eri->grid_trans.coord_range[1].num; ++icy)
 				{
-					for (long jcy = 0; jcy < eri->grid_trans.coord_range[1].num; ++jcy)
+					for (glong jcy = 0; jcy < eri->grid_trans.coord_range[1].num; ++jcy)
 					{
 						if (labs(icy - jcy) > grid->coord_range[1].num - 1) {
 							continue;
 						}
 						// use reflection symmetry to avoid redundant calculations
-						for (long kcy = -eri->grid_trans.coord_range[1].istart; kcy < eri->grid_trans.coord_range[1].num; ++kcy)
+						for (glong kcy = -eri->grid_trans.coord_range[1].istart; kcy < eri->grid_trans.coord_range[1].num; ++kcy)
 						{
 							if (labs(icy - kcy) > grid->coord_range[1].num - 1 || labs(jcy - kcy) > grid->coord_range[1].num - 1) {
 								continue;
@@ -293,24 +293,24 @@ void compute_eri_gausslet_integrals(
 
 							const double center_diff_y = 0.5 * ((icy + jcy) - (kcy + lcy));
 
-							const long ishift_ij_y   = (icy - jcy) - gfp.shifts.istart;
-							const long ishift_kl_y   = (kcy - lcy) - gfp.shifts.istart;
+							const glong ishift_ij_y   = (icy - jcy) - gfp.shifts.istart;
+							const glong ishift_kl_y   = (kcy - lcy) - gfp.shifts.istart;
 							assert(0 <= ishift_ij_y && ishift_ij_y < gfp.shifts.num);
 							assert(0 <= ishift_kl_y && ishift_kl_y < gfp.shifts.num);
-							const long ishift_ijkl_y = ishift_ij_y * gfp.shifts.num + ishift_kl_y;
-							const double* products_y = gfp.products[ishift_ijkl_y];
-							const long istart_y      = gfp.indices [ishift_ijkl_y].istart;
-							const long num_y         = gfp.indices [ishift_ijkl_y].num;
+							const glong ishift_ijkl_y = ishift_ij_y * gfp.shifts.num + ishift_kl_y;
+							const double* products_y  = gfp.products[ishift_ijkl_y];
+							const glong istart_y      = gfp.indices [ishift_ijkl_y].istart;
+							const glong num_y         = gfp.indices [ishift_ijkl_y].num;
 
-							for (long icz = 0; icz < eri->grid_trans.coord_range[2].num; ++icz)
+							for (glong icz = 0; icz < eri->grid_trans.coord_range[2].num; ++icz)
 							{
-								for (long jcz = 0; jcz < eri->grid_trans.coord_range[2].num; ++jcz)
+								for (glong jcz = 0; jcz < eri->grid_trans.coord_range[2].num; ++jcz)
 								{
 									if (labs(icz - jcz) > grid->coord_range[2].num - 1) {
 										continue;
 									}
 									// use reflection symmetry to avoid redundant calculations
-									for (long kcz = -eri->grid_trans.coord_range[2].istart; kcz < eri->grid_trans.coord_range[2].num; ++kcz)
+									for (glong kcz = -eri->grid_trans.coord_range[2].istart; kcz < eri->grid_trans.coord_range[2].num; ++kcz)
 									{
 										if (labs(icz - kcz) > grid->coord_range[2].num - 1 || labs(jcz - kcz) > grid->coord_range[2].num - 1) {
 											continue;
@@ -318,26 +318,26 @@ void compute_eri_gausslet_integrals(
 
 										const double center_diff_z = 0.5 * ((icz + jcz) - (kcz + lcz));
 
-										const long ishift_ij_z   = (icz - jcz) - gfp.shifts.istart;
-										const long ishift_kl_z   = (kcz - lcz) - gfp.shifts.istart;
+										const glong ishift_ij_z   = (icz - jcz) - gfp.shifts.istart;
+										const glong ishift_kl_z   = (kcz - lcz) - gfp.shifts.istart;
 										assert(0 <= ishift_ij_z && ishift_ij_z < gfp.shifts.num);
 										assert(0 <= ishift_kl_z && ishift_kl_z < gfp.shifts.num);
-										const long ishift_ijkl_z = ishift_ij_z * gfp.shifts.num + ishift_kl_z;
-										const double* products_z = gfp.products[ishift_ijkl_z];
-										const long istart_z      = gfp.indices [ishift_ijkl_z].istart;
-										const long num_z         = gfp.indices [ishift_ijkl_z].num;
+										const glong ishift_ijkl_z = ishift_ij_z * gfp.shifts.num + ishift_kl_z;
+										const double* products_z  = gfp.products[ishift_ijkl_z];
+										const glong istart_z      = gfp.indices [ishift_ijkl_z].istart;
+										const glong num_z         = gfp.indices [ishift_ijkl_z].num;
 
-										const long idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx, icy, icz);
-										const long idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx, jcy, jcz);
+										const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx, icy, icz);
+										const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx, jcy, jcz);
 										// use permutation symmetry to avoid redundant calculations
 										if (idx_i < idx_j) {
 											continue;
 										}
-										const long idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx, kcy, kcz);
+										const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx, kcy, kcz);
 
 										double val = 0;
 										double pt[3];
-										for (long sx = 0; sx < num_x; ++sx)
+										for (glong sx = 0; sx < num_x; ++sx)
 										{
 											if (fabs(products_x[sx]) <= tol) {
 												continue;
@@ -345,7 +345,7 @@ void compute_eri_gausslet_integrals(
 
 											pt[0] = center_diff_x + (istart_x + sx) / 6.0;
 
-											for (long sy = 0; sy < num_y; ++sy)
+											for (glong sy = 0; sy < num_y; ++sy)
 											{
 												if (fabs(products_y[sy]) <= tol) {
 													continue;
@@ -353,7 +353,7 @@ void compute_eri_gausslet_integrals(
 
 												pt[1] = center_diff_y + (istart_y + sy) / 6.0;
 
-												for (long sz = 0; sz < num_z; ++sz)
+												for (glong sz = 0; sz < num_z; ++sz)
 												{
 													if (fabs(products_z[sz]) <= tol) {
 														continue;
@@ -380,20 +380,20 @@ void compute_eri_gausslet_integrals(
 
 	// fill omitted entries according to symmetries
 	#pragma omp parallel for schedule(dynamic) collapse(2)
-	for (long icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
+	for (glong icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
 	{
-		for (long jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
 		{
 			if (labs(icx - jcx) > grid->coord_range[0].num - 1) {
 				continue;
 			}
-			for (long kcx = 0; kcx < eri->grid_trans.coord_range[0].num; ++kcx)
+			for (glong kcx = 0; kcx < eri->grid_trans.coord_range[0].num; ++kcx)
 			{
 				if (labs(icx - kcx) > grid->coord_range[0].num - 1 || labs(jcx - kcx) > grid->coord_range[0].num - 1) {
 					continue;
 				}
 
-				long icx_p, jcx_p, kcx_p;
+				glong icx_p, jcx_p, kcx_p;
 				if (eri->grid_trans.coord_range[0].istart + kcx >= 0)
 				{
 					icx_p = icx;
@@ -408,20 +408,20 @@ void compute_eri_gausslet_integrals(
 					kcx_p = -kcx - 2 * eri->grid_trans.coord_range[0].istart;
 				}
 
-				for (long icy = 0; icy < eri->grid_trans.coord_range[1].num; ++icy)
+				for (glong icy = 0; icy < eri->grid_trans.coord_range[1].num; ++icy)
 				{
-					for (long jcy = 0; jcy < eri->grid_trans.coord_range[1].num; ++jcy)
+					for (glong jcy = 0; jcy < eri->grid_trans.coord_range[1].num; ++jcy)
 					{
 						if (labs(icy - jcy) > grid->coord_range[1].num - 1) {
 							continue;
 						}
-						for (long kcy = 0; kcy < eri->grid_trans.coord_range[1].num; ++kcy)
+						for (glong kcy = 0; kcy < eri->grid_trans.coord_range[1].num; ++kcy)
 						{
 							if (labs(icy - kcy) > grid->coord_range[1].num - 1 || labs(jcy - kcy) > grid->coord_range[1].num - 1) {
 								continue;
 							}
 
-							long icy_p, jcy_p, kcy_p;
+							glong icy_p, jcy_p, kcy_p;
 							if (eri->grid_trans.coord_range[1].istart + kcy >= 0)
 							{
 								icy_p = icy;
@@ -436,20 +436,20 @@ void compute_eri_gausslet_integrals(
 								kcy_p = -kcy - 2 * eri->grid_trans.coord_range[1].istart;
 							}
 
-							for (long icz = 0; icz < eri->grid_trans.coord_range[2].num; ++icz)
+							for (glong icz = 0; icz < eri->grid_trans.coord_range[2].num; ++icz)
 							{
-								for (long jcz = 0; jcz < eri->grid_trans.coord_range[2].num; ++jcz)
+								for (glong jcz = 0; jcz < eri->grid_trans.coord_range[2].num; ++jcz)
 								{
 									if (labs(icz - jcz) > grid->coord_range[2].num - 1) {
 										continue;
 									}
-									for (long kcz = 0; kcz < eri->grid_trans.coord_range[2].num; ++kcz)
+									for (glong kcz = 0; kcz < eri->grid_trans.coord_range[2].num; ++kcz)
 									{
 										if (labs(icz - kcz) > grid->coord_range[2].num - 1 || labs(jcz - kcz) > grid->coord_range[2].num - 1) {
 											continue;
 										}
 
-										long icz_p, jcz_p, kcz_p;
+										glong icz_p, jcz_p, kcz_p;
 										if (eri->grid_trans.coord_range[2].istart + kcz >= 0)
 										{
 											icz_p = icz;
@@ -464,18 +464,18 @@ void compute_eri_gausslet_integrals(
 											kcz_p = -kcz - 2 * eri->grid_trans.coord_range[2].istart;
 										}
 
-										const long idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx, icy, icz);
-										const long idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx, jcy, jcz);
-										const long idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx, kcy, kcz);
+										const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx, icy, icz);
+										const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx, jcy, jcz);
+										const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx, kcy, kcz);
 
-										long idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx_p, icy_p, icz_p);
-										long idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx_p, jcy_p, jcz_p);
-										long idx_k_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx_p, kcy_p, kcz_p);
+										glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx_p, icy_p, icz_p);
+										glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx_p, jcy_p, jcz_p);
+										glong idx_k_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx_p, kcy_p, kcz_p);
 
 										if (idx_i_p < idx_j_p)
 										{
 											// swap according to permutation symmetry
-											long tmp = idx_i_p;
+											glong tmp = idx_i_p;
 											idx_i_p = idx_j_p;
 											idx_j_p = tmp;
 										}
@@ -502,41 +502,41 @@ void compute_eri_gausslet_integrals(
 ///
 void reconstruct_full_eri_tensor(const struct eri_gausslet_integrals* eri, double* full_tensor)
 {
-	const long num_points       = cartesian_grid_3d_num_points(&eri->grid);
-	const long num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
+	const glong num_points       = cartesian_grid_3d_num_points(&eri->grid);
+	const glong num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
 
 	#pragma omp parallel for collapse(12)
-	for (long icx = 0; icx < eri->grid.coord_range[0].num; ++icx)
+	for (glong icx = 0; icx < eri->grid.coord_range[0].num; ++icx)
 	{
-		for (long jcx = 0; jcx < eri->grid.coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < eri->grid.coord_range[0].num; ++jcx)
 		{
-			for (long kcx = 0; kcx < eri->grid.coord_range[0].num; ++kcx)
+			for (glong kcx = 0; kcx < eri->grid.coord_range[0].num; ++kcx)
 			{
-				for (long lcx = 0; lcx < eri->grid.coord_range[0].num; ++lcx)
+				for (glong lcx = 0; lcx < eri->grid.coord_range[0].num; ++lcx)
 				{
 
-					for (long icy = 0; icy < eri->grid.coord_range[1].num; ++icy)
+					for (glong icy = 0; icy < eri->grid.coord_range[1].num; ++icy)
 					{
-						for (long jcy = 0; jcy < eri->grid.coord_range[1].num; ++jcy)
+						for (glong jcy = 0; jcy < eri->grid.coord_range[1].num; ++jcy)
 						{
-							for (long kcy = 0; kcy < eri->grid.coord_range[1].num; ++kcy)
+							for (glong kcy = 0; kcy < eri->grid.coord_range[1].num; ++kcy)
 							{
-								for (long lcy = 0; lcy < eri->grid.coord_range[1].num; ++lcy)
+								for (glong lcy = 0; lcy < eri->grid.coord_range[1].num; ++lcy)
 								{
 
-									for (long icz = 0; icz < eri->grid.coord_range[2].num; ++icz)
+									for (glong icz = 0; icz < eri->grid.coord_range[2].num; ++icz)
 									{
-										for (long jcz = 0; jcz < eri->grid.coord_range[2].num; ++jcz)
+										for (glong jcz = 0; jcz < eri->grid.coord_range[2].num; ++jcz)
 										{
-											for (long kcz = 0; kcz < eri->grid.coord_range[2].num; ++kcz)
+											for (glong kcz = 0; kcz < eri->grid.coord_range[2].num; ++kcz)
 											{
-												for (long lcz = 0; lcz < eri->grid.coord_range[2].num; ++lcz)
+												for (glong lcz = 0; lcz < eri->grid.coord_range[2].num; ++lcz)
 												{
 
-													const long idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx, icy, icz);
-													const long idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx, jcy, jcz);
-													const long idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx, kcy, kcz);
-													const long idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx, lcy, lcz);
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx, jcy, jcz);
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx, lcy, lcz);
 
 													if (idx_i < idx_j) {
 														continue;
@@ -548,9 +548,9 @@ void reconstruct_full_eri_tensor(const struct eri_gausslet_integrals* eri, doubl
 														continue;
 													}
 
-													const long idx_il = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (icx - lcx) - eri->grid_trans.coord_range[0].istart, (icy - lcy) - eri->grid_trans.coord_range[1].istart, (icz - lcz) - eri->grid_trans.coord_range[2].istart);
-													const long idx_jl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (jcx - lcx) - eri->grid_trans.coord_range[0].istart, (jcy - lcy) - eri->grid_trans.coord_range[1].istart, (jcz - lcz) - eri->grid_trans.coord_range[2].istart);
-													const long idx_kl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (kcx - lcx) - eri->grid_trans.coord_range[0].istart, (kcy - lcy) - eri->grid_trans.coord_range[1].istart, (kcz - lcz) - eri->grid_trans.coord_range[2].istart);
+													const glong idx_il = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (icx - lcx) - eri->grid_trans.coord_range[0].istart, (icy - lcy) - eri->grid_trans.coord_range[1].istart, (icz - lcz) - eri->grid_trans.coord_range[2].istart);
+													const glong idx_jl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (jcx - lcx) - eri->grid_trans.coord_range[0].istart, (jcy - lcy) - eri->grid_trans.coord_range[1].istart, (jcz - lcz) - eri->grid_trans.coord_range[2].istart);
+													const glong idx_kl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (kcx - lcx) - eri->grid_trans.coord_range[0].istart, (kcy - lcy) - eri->grid_trans.coord_range[1].istart, (kcz - lcz) - eri->grid_trans.coord_range[2].istart);
 
 													const double val = eri->integral_values[(idx_il * num_points_trans + idx_jl) * num_points_trans + idx_kl];
 

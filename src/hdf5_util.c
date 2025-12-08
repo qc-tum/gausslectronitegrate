@@ -243,7 +243,7 @@ herr_t write_hdf5_scalar_attribute(hid_t file, const char* name, hid_t mem_type_
 ///
 /// \brief Write an HDF5 vector attribute to a file.
 ///
-herr_t write_hdf5_vector_attribute(hid_t file, const char* name, hid_t mem_type_store, hid_t mem_type_input, const long length, const void* data)
+herr_t write_hdf5_vector_attribute(hid_t file, const char* name, hid_t mem_type_store, hid_t mem_type_input, const glong length, const void* data)
 {
 	hsize_t dims[1] = { length };
 	hid_t space = H5Screate_simple(1, dims, NULL);

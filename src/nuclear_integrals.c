@@ -36,7 +36,7 @@ double compute_nuclear_gausslet_integral(
 
 	struct gausslet_factors gf;
 	{
-		const long max_range = lmax(lmax(
+		const glong max_range = lmax(lmax(
 			labs(points[0].x - points[1].x),
 			labs(points[0].y - points[1].y)),
 			labs(points[0].z - points[1].z)) + 1;
@@ -81,7 +81,7 @@ double compute_nuclear_gausslet_integral(
 	};
 
 	double val = 0;
-	for (long sx = 0; sx < num.x; ++sx)
+	for (glong sx = 0; sx < num.x; ++sx)
 	{
 		if (fabs(factors[0][sx]) <= tol) {
 			continue;
@@ -89,7 +89,7 @@ double compute_nuclear_gausslet_integral(
 
 		const double pt_x = center[0] + (istart.x + sx) / 6.0;
 
-		for (long sy = 0; sy < num.y; ++sy)
+		for (glong sy = 0; sy < num.y; ++sy)
 		{
 			if (fabs(factors[1][sy]) <= tol) {
 				continue;
@@ -97,7 +97,7 @@ double compute_nuclear_gausslet_integral(
 
 			const double pt_y = center[1] + (istart.y + sy) / 6.0;
 
-			for (long sz = 0; sz < num.z; ++sz)
+			for (glong sz = 0; sz < num.z; ++sz)
 			{
 				if (fabs(factors[2][sz]) <= tol) {
 					continue;
@@ -149,7 +149,7 @@ void compute_nuclear_gausslet_integrals(
 
 	struct gausslet_factors gf;
 	{
-		const long max_range = lmax(lmax(
+		const glong max_range = lmax(lmax(
 			grid->coord_range[0].num,
 			grid->coord_range[1].num),
 			grid->coord_range[2].num);
@@ -164,45 +164,45 @@ void compute_nuclear_gausslet_integrals(
 		compute_gausslet_factors(gdata, &shifts, tol, &gf);
 	}
 
-	const long num_points = cartesian_grid_3d_num_points(grid);
+	const glong num_points = cartesian_grid_3d_num_points(grid);
 	ngi->integral_values = aligned_calloc(num_points * num_points * sizeof(ngi->integral_values[0]));
 
 	#pragma omp parallel for schedule(dynamic) collapse(2)
-	for (long icx = 0; icx < grid->coord_range[0].num; ++icx)
+	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
 	{
-		for (long jcx = 0; jcx < grid->coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < grid->coord_range[0].num; ++jcx)
 		{
 			const double center_x = grid->coord_range[0].istart + 0.5 * (icx + jcx);
 
-			const long ishift_x     = (icx - jcx) - gf.shifts.istart;
+			const glong ishift_x    = (icx - jcx) - gf.shifts.istart;
 			const double* factors_x = gf.factors[ishift_x];
-			const long istart_x     = gf.indices[ishift_x].istart;
-			const long num_x        = gf.indices[ishift_x].num;
+			const glong istart_x    = gf.indices[ishift_x].istart;
+			const glong num_x       = gf.indices[ishift_x].num;
 
-			for (long icy = 0; icy < grid->coord_range[1].num; ++icy)
+			for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
 			{
-				for (long jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
+				for (glong jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
 				{
 					const double center_y = grid->coord_range[1].istart + 0.5 * (icy + jcy);
 
-					const long ishift_y     = (icy - jcy) - gf.shifts.istart;
+					const glong ishift_y    = (icy - jcy) - gf.shifts.istart;
 					const double* factors_y = gf.factors[ishift_y];
-					const long istart_y     = gf.indices[ishift_y].istart;
-					const long num_y        = gf.indices[ishift_y].num;
+					const glong istart_y    = gf.indices[ishift_y].istart;
+					const glong num_y       = gf.indices[ishift_y].num;
 
-					for (long icz = 0; icz < grid->coord_range[2].num; ++icz)
+					for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
 					{
-						for (long jcz = 0; jcz < grid->coord_range[2].num; ++jcz)
+						for (glong jcz = 0; jcz < grid->coord_range[2].num; ++jcz)
 						{
 							const double center_z = grid->coord_range[2].istart + 0.5 * (icz + jcz);
 
-							const long ishift_z     = (icz - jcz) - gf.shifts.istart;
+							const glong ishift_z    = (icz - jcz) - gf.shifts.istart;
 							const double* factors_z = gf.factors[ishift_z];
-							const long istart_z     = gf.indices[ishift_z].istart;
-							const long num_z        = gf.indices[ishift_z].num;
+							const glong istart_z    = gf.indices[ishift_z].istart;
+							const glong num_z       = gf.indices[ishift_z].num;
 
-							const long idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
-							const long idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
+							const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
+							const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
 
 							// use symmetry to avoid redundant calculations
 							if (idx_i > idx_j) {
@@ -210,7 +210,7 @@ void compute_nuclear_gausslet_integrals(
 							}
 
 							double val = 0;
-							for (long sx = 0; sx < num_x; ++sx)
+							for (glong sx = 0; sx < num_x; ++sx)
 							{
 								if (fabs(factors_x[sx]) <= tol) {
 									continue;
@@ -218,7 +218,7 @@ void compute_nuclear_gausslet_integrals(
 
 								const double pt_x = center_x + (istart_x + sx) / 6.0;
 
-								for (long sy = 0; sy < num_y; ++sy)
+								for (glong sy = 0; sy < num_y; ++sy)
 								{
 									if (fabs(factors_y[sy]) <= tol) {
 										continue;
@@ -226,7 +226,7 @@ void compute_nuclear_gausslet_integrals(
 
 									const double pt_y = center_y + (istart_y + sy) / 6.0;
 
-									for (long sz = 0; sz < num_z; ++sz)
+									for (glong sz = 0; sz < num_z; ++sz)
 									{
 										if (fabs(factors_z[sz]) <= tol) {
 											continue;
@@ -262,8 +262,8 @@ void compute_nuclear_gausslet_integrals(
 
 	// fill entries in lower triangular part according to symmetry
 	#pragma omp parallel for schedule(dynamic)
-	for (long idx_i = 0; idx_i < num_points; ++idx_i) {
-		for (long idx_j = 0; idx_j < idx_i; ++idx_j) {
+	for (glong idx_i = 0; idx_i < num_points; ++idx_i) {
+		for (glong idx_j = 0; idx_j < idx_i; ++idx_j) {
 			ngi->integral_values[idx_i * num_points + idx_j] = ngi->integral_values[idx_j * num_points + idx_i];
 		}
 	}

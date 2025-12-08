@@ -64,7 +64,7 @@ char* test_nuclear_integrals()
 	compute_nuclear_gausslet_integrals(&gdata, &grid, nuclei, num_nuclei, tol, &ngi);
 
 	// reference data
-	const long num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
 	double* integral_values_ref = aligned_malloc(num_points * num_points * sizeof(integral_values_ref[0]));
 	if (read_hdf5_dataset(file, "ngi", H5T_NATIVE_DOUBLE, integral_values_ref) < 0) {
 		return "reading nuclear integral values from disk failed";

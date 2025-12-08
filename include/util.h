@@ -1,7 +1,12 @@
 #pragma once
 
+#include <stdint.h>
 #include <math.h>
 #include <assert.h>
+
+
+/// \brief Universal "long" integer.
+typedef int64_t glong;
 
 
 //________________________________________________________________________________________________________________________
@@ -28,7 +33,7 @@ static inline double cubic_power(const double x)
 ///
 /// \brief Minimum of two long integers.
 ///
-static inline long lmin(const long a, const long b)
+static inline glong lmin(const glong a, const glong b)
 {
 	return (a <= b) ? a : b;
 }
@@ -38,7 +43,7 @@ static inline long lmin(const long a, const long b)
 ///
 /// \brief Maximum of two long integers.
 ///
-static inline long lmax(const long a, const long b)
+static inline glong lmax(const glong a, const glong b)
 {
 	return (a >= b) ? a : b;
 }
@@ -103,10 +108,10 @@ static inline double vec3_norm(const double v[3])
 ///
 /// \brief Uniform distance (infinity norm) between 'x' and 'y'.
 ///
-static inline double uniform_distance(const long n, const double* x, const double* y)
+static inline double uniform_distance(const glong n, const double* x, const double* y)
 {
 	double d = 0;
-	for (long i = 0; i < n; ++i)
+	for (glong i = 0; i < n; ++i)
 	{
 		d = fmax(d, fabs(x[i] - y[i]));
 	}

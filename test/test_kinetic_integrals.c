@@ -41,7 +41,7 @@ char* test_kinetic_integrals()
 	compute_kinetic_gausslet_integrals(&gdata, &grid, &kgi);
 
 	// reference data
-	const long num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
 	double* integral_values_ref = aligned_malloc(num_points * num_points * sizeof(integral_values_ref[0]));
 	if (read_hdf5_dataset(file, "kgi", H5T_NATIVE_DOUBLE, integral_values_ref) < 0) {
 		return "reading kinetic integral values from disk failed";

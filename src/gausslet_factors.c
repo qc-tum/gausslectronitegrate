@@ -25,37 +25,37 @@ void compute_gausslet_factors(const struct gausslet_data* gdata, const struct ra
 	gf->factors = aligned_calloc(gf->shifts.num * sizeof(gf->factors[0]));
 	gf->indices = aligned_calloc(gf->shifts.num * sizeof(gf->indices[0]));
 
-	for (long k = 0; k < gf->shifts.num; ++k)
+	for (glong k = 0; k < gf->shifts.num; ++k)
 	{
-		const long shift = gf->shifts.istart + k;
+		const glong shift = gf->shifts.istart + k;
 
 		double* all_factors = aligned_calloc(all_indices.num * sizeof(all_factors[0]));
 
-		for (long i = 0; i < gdata->indices.num; ++i)
+		for (glong i = 0; i < gdata->indices.num; ++i)
 		{
 			const double coeff_a = gdata->coefficients[i];
 
-			for (long j = 0; j < gdata->indices.num; ++j)
+			for (glong j = 0; j < gdata->indices.num; ++j)
 			{
 				const double coeff_b = gdata->coefficients[j];
 
 				// using that all_indices.istart == 2 * gdata->indices.istart
-				const long idx = i + j;
+				const glong idx = i + j;
 				assert(idx < all_indices.num);
 				all_factors[idx] += coeff_a * coeff_b * exp(-square(0.5 * (3 * shift + (i - j))));
 			}
 		}
 
 		// filter out small factors
-		long min_index = -1;
-		for (long m = 0; m < all_indices.num; ++m) {
+		glong min_index = -1;
+		for (glong m = 0; m < all_indices.num; ++m) {
 			if (fabs(all_factors[m]) > tol) {
 				min_index = m;
 				break;
 			}
 		}
-		long max_index = -1;
-		for (long m = all_indices.num - 1; m >= 0; --m) {
+		glong max_index = -1;
+		for (glong m = all_indices.num - 1; m >= 0; --m) {
 			if (fabs(all_factors[m]) > tol) {
 				max_index = m;
 				break;
@@ -84,7 +84,7 @@ void compute_gausslet_factors(const struct gausslet_data* gdata, const struct ra
 ///
 void delete_gausslet_factors(struct gausslet_factors* gf)
 {
-	for (long i = 0; i < gf->shifts.num; ++i) {
+	for (glong i = 0; i < gf->shifts.num; ++i) {
 		if (gf->factors[i] != NULL) {
 			aligned_free(gf->factors[i]);
 		}

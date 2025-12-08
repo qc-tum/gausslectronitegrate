@@ -45,8 +45,8 @@ char* test_eri_integrals()
 	struct eri_gausslet_integrals eri;
 	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
 
-	const long num_points = cartesian_grid_3d_num_points(&grid);
-	const long num_entries = num_points * num_points * num_points * num_points;
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_entries = num_points * num_points * num_points * num_points;
 
 	// reconstruct full tensor
 	double* full_tensor = aligned_malloc(num_entries * sizeof(full_tensor[0]));

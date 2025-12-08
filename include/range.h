@@ -1,5 +1,7 @@
 #pragma once
 
+#include "util.h"
+
 
 //________________________________________________________________________________________________________________________
 ///
@@ -7,8 +9,8 @@
 ///
 struct range
 {
-	long istart;  //!< starting integer
-	long num;     //!< number of entries (logical length)
+	glong istart;  //!< starting integer
+	glong num;     //!< number of entries (logical length)
 };
 
 

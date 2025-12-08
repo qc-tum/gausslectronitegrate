@@ -5,6 +5,19 @@
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Specification of a single Cartesian grid point in three dimensions.
+///
+union cartesian_grid_point_3d
+{
+	struct {
+		glong x, y, z;  //!< x, y, z coordinates
+	};
+	glong c[3];         //!< array of coordinates
+};
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Specification of a Cartesian grid in three dimensions.
 ///
 struct cartesian_grid_3d
@@ -17,7 +30,7 @@ struct cartesian_grid_3d
 ///
 /// \brief Number of grid points of a Cartesian grid in three dimensions.
 ///
-static inline long cartesian_grid_3d_num_points(const struct cartesian_grid_3d* grid)
+static inline glong cartesian_grid_3d_num_points(const struct cartesian_grid_3d* grid)
 {
 	return grid->coord_range[0].num
 	     * grid->coord_range[1].num
@@ -29,20 +42,7 @@ static inline long cartesian_grid_3d_num_points(const struct cartesian_grid_3d* 
 ///
 /// \brief Convert a Cartesian grid index to a linear index.
 ///
-static inline long cartesian_grid_3d_cartesian_to_linear_index(const struct cartesian_grid_3d* grid, const long ix, const long iy, const long iz)
+static inline glong cartesian_grid_3d_cartesian_to_linear_index(const struct cartesian_grid_3d* grid, const glong ix, const glong iy, const glong iz)
 {
 	return (ix * grid->coord_range[1].num + iy) * grid->coord_range[2].num + iz;
 }
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Specification of a single Cartesian grid point in three dimensions.
-///
-union cartesian_grid_point_3d
-{
-	struct {
-		long x, y, z;  //!< x, y, z coordinates
-	};
-	long c[3];         //!< array of coordinates
-};

@@ -47,7 +47,7 @@ int main()
 			{ .istart = -2, .num = 5 },
 		}
 	};
-	const long num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
 
 	const double tol = 1e-5;
 	printf("truncation tolerance: %g\n", tol);
@@ -68,11 +68,11 @@ int main()
 	const uint64_t tick_end = get_time_ticks();
 	printf("Done.\n");
 
-	const long num_points_trans = cartesian_grid_3d_num_points(&eri.grid_trans);
+	const glong num_points_trans = cartesian_grid_3d_num_points(&eri.grid_trans);
 	printf("number of points of translational grid: %li\n", num_points_trans);
 
 	// index of origin
-	const long iorigin = cartesian_grid_3d_cartesian_to_linear_index(&eri.grid_trans,
+	const glong iorigin = cartesian_grid_3d_cartesian_to_linear_index(&eri.grid_trans,
 		-eri.grid_trans.coord_range[0].istart,
 		-eri.grid_trans.coord_range[1].istart,
 		-eri.grid_trans.coord_range[2].istart);

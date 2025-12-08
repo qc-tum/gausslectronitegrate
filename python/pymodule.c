@@ -291,7 +291,7 @@ static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObje
 	const char* syntax = "grid_point_to_linear_index(grid, px, py, pz)";
 
 	PyObject* py_grid;
-	long px, py, pz;
+	glong px, py, pz;
 
 	// parse input arguments
 	if (!PyArg_ParseTuple(args, "Olll", &py_grid, &px, &py, &pz)) {
@@ -403,7 +403,7 @@ static PyObject* Py_compute_kinetic_gausslet_integrals(PyObject* Py_UNUSED(self)
 	compute_kinetic_gausslet_integrals(&gdata, &grid, &kgi);
 
 	// create NumPy array of degree 2 containing integral values (return value)
-	const long num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
 	npy_intp dims[2] = { num_points, num_points };
 	PyArrayObject* py_integral_values = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_DOUBLE);
 	if (py_integral_values == NULL) {
@@ -508,7 +508,7 @@ static PyObject* Py_compute_nuclear_gausslet_integrals(PyObject* Py_UNUSED(self)
 	compute_nuclear_gausslet_integrals(&gdata, &grid, nuclear_conf.nuclei, nuclear_conf.num_nuclei, tol, &ngi);
 
 	// create NumPy array of degree 2 containing integral values (return value)
-	const long num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
 	npy_intp dims[2] = { num_points, num_points };
 	PyArrayObject* py_integral_values = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_DOUBLE);
 	if (py_integral_values == NULL) {
@@ -597,7 +597,7 @@ static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), Py
 	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
 
 	// create NumPy array of degree 3 containing integral values (first return value)
-	const long num_points_trans = cartesian_grid_3d_num_points(&eri.grid_trans);
+	const glong num_points_trans = cartesian_grid_3d_num_points(&eri.grid_trans);
 	npy_intp dims[3] = { num_points_trans, num_points_trans, num_points_trans };
 	PyArrayObject* py_integral_values = (PyArrayObject*)PyArray_SimpleNew(3, dims, NPY_DOUBLE);
 	if (py_integral_values == NULL) {
@@ -671,7 +671,7 @@ static PyObject* Py_compute_full_eri_gausslet_integrals(PyObject* Py_UNUSED(self
 	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
 
 	// create NumPy array of degree 4 to store the full ERI tensor
-	const long num_points = cartesian_grid_3d_num_points(&grid);
+	const glong num_points = cartesian_grid_3d_num_points(&grid);
 	npy_intp dims[4] = { num_points, num_points, num_points, num_points };
 	PyArrayObject* py_full_tensor = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
 	if (py_full_tensor == NULL) {
