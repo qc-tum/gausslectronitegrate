@@ -291,10 +291,10 @@ static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObje
 	const char* syntax = "grid_point_to_linear_index(grid, px, py, pz)";
 
 	PyObject* py_grid;
-	glong px, py, pz;
+	union cartesian_grid_point_3d pt;
 
 	// parse input arguments
-	if (!PyArg_ParseTuple(args, "Olll", &py_grid, &px, &py, &pz)) {
+	if (!PyArg_ParseTuple(args, "Olll", &py_grid, &pt.x, &pt.y, &pt.z)) {
 		char msg[1024];
 		sprintf(msg, "error parsing input; syntax: %s", syntax);
 		PyErr_SetString(PyExc_SyntaxError, msg);
@@ -308,30 +308,65 @@ static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObje
 	}
 
 	// range checks
-	if (px < grid.coord_range[0].istart || grid.coord_range[0].istart + grid.coord_range[0].num - 1 < px) {
+	if (pt.x < grid.coord_range[0].istart || grid.coord_range[0].istart + grid.coord_range[0].num - 1 < pt.x) {
 		char msg[1024];
 		sprintf(msg, "'px' out of grid coordinate range; syntax: %s", syntax);
 		PyErr_SetString(PyExc_ValueError, msg);
 		return NULL;
 	}
-	if (py < grid.coord_range[1].istart || grid.coord_range[1].istart + grid.coord_range[1].num - 1 < py) {
+	if (pt.y < grid.coord_range[1].istart || grid.coord_range[1].istart + grid.coord_range[1].num - 1 < pt.y) {
 		char msg[1024];
 		sprintf(msg, "'py' out of grid coordinate range; syntax: %s", syntax);
 		PyErr_SetString(PyExc_ValueError, msg);
 		return NULL;
 	}
-	if (pz < grid.coord_range[2].istart || grid.coord_range[2].istart + grid.coord_range[2].num - 1 < pz) {
+	if (pt.z < grid.coord_range[2].istart || grid.coord_range[2].istart + grid.coord_range[2].num - 1 < pt.z) {
 		char msg[1024];
 		sprintf(msg, "'pz' out of grid coordinate range; syntax: %s", syntax);
 		PyErr_SetString(PyExc_ValueError, msg);
 		return NULL;
 	}
 
-	return PyLong_FromLong(
-		cartesian_grid_3d_cartesian_to_linear_index(&grid,
-			px - grid.coord_range[0].istart,
-			py - grid.coord_range[1].istart,
-			pz - grid.coord_range[2].istart));
+	return PyLong_FromLong(cartesian_grid_point_3d_to_linear_index(&grid, &pt));
+}
+
+
+static PyObject* Py_linear_index_to_grid_point(PyObject* Py_UNUSED(self), PyObject* args)
+{
+	const char* syntax = "linear_index_to_grid_point(grid, idx)";
+
+	PyObject* py_grid;
+	glong idx;
+
+	// parse input arguments
+	if (!PyArg_ParseTuple(args, "Ol", &py_grid, &idx)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// grid specification
+	struct cartesian_grid_3d grid;
+	if (parse_cartesian_grid(py_grid, syntax, &grid) < 0) {
+		return NULL;
+	}
+
+	// range check
+	if (idx < 0 || cartesian_grid_3d_num_points(&grid) <= idx) {
+		char msg[1024];
+		sprintf(msg, "'idx' out of range; syntax: %s", syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		return NULL;
+	}
+
+	union cartesian_grid_point_3d pt;
+	linear_index_to_cartesian_grid_point_3d(&grid, idx, &pt);
+
+	return PyTuple_Pack(3,
+		PyLong_FromLong(pt.x),
+		PyLong_FromLong(pt.y),
+		PyLong_FromLong(pt.z));
 }
 
 
@@ -717,6 +752,12 @@ static PyMethodDef methods[] = {
 		.ml_meth  = Py_grid_point_to_linear_index,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Convert a Cartesian grid point to a linear index.",
+	},
+	{
+		.ml_name  = "linear_index_to_grid_point",
+		.ml_meth  = Py_linear_index_to_grid_point,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Convert a linear index to a Cartesian grid point.",
 	},
 	{
 		.ml_name  = "compute_kinetic_gausslet_integral",

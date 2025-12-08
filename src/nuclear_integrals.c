@@ -57,9 +57,9 @@ double compute_nuclear_gausslet_integral(
 	};
 
 	const union cartesian_grid_point_3d ishift = {
-		(points[0].x - points[1].x) - gf.shifts.istart,
-		(points[0].y - points[1].y) - gf.shifts.istart,
-		(points[0].z - points[1].z) - gf.shifts.istart,
+		.x = (points[0].x - points[1].x) - gf.shifts.istart,
+		.y = (points[0].y - points[1].y) - gf.shifts.istart,
+		.z = (points[0].z - points[1].z) - gf.shifts.istart,
 	};
 
 	const double* factors[3] = {
@@ -69,15 +69,15 @@ double compute_nuclear_gausslet_integral(
 	};
 
 	const union cartesian_grid_point_3d istart = {
-		gf.indices[ishift.x].istart,
-		gf.indices[ishift.y].istart,
-		gf.indices[ishift.z].istart,
+		.x = gf.indices[ishift.x].istart,
+		.y = gf.indices[ishift.y].istart,
+		.z = gf.indices[ishift.z].istart,
 	};
 
 	const union cartesian_grid_point_3d num = {
-		gf.indices[ishift.x].num,
-		gf.indices[ishift.y].num,
-		gf.indices[ishift.z].num,
+		.x = gf.indices[ishift.x].num,
+		.y = gf.indices[ishift.y].num,
+		.z = gf.indices[ishift.z].num,
 	};
 
 	double val = 0;
