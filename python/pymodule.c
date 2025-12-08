@@ -335,6 +335,42 @@ static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObje
 }
 
 
+static PyObject* Py_compute_kinetic_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
+{
+	const char* syntax = "compute_kinetic_gausslet_integral(gausslet_coeffs, grid_points)";
+
+	PyObject* py_gausslet_coeffs;
+	PyObject* py_grid_points;
+
+	// parse input arguments
+	if (!PyArg_ParseTuple(args, "OO", &py_gausslet_coeffs, &py_grid_points)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// Gausslet coefficients
+	struct gausslet_data gdata;
+	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
+		return NULL;
+	}
+
+	// grid points
+	union cartesian_grid_point_3d grid_points[2];
+	if (parse_cartesian_grid_points(py_grid_points, syntax, 2, grid_points) < 0) {
+		return NULL;
+	}
+
+	// compute kinetic overlap integral
+	const double kgi = compute_kinetic_gausslet_integral(&gdata, grid_points);
+
+	aligned_free(gdata.coefficients);
+
+	return PyFloat_FromDouble(kgi);
+}
+
+
 static PyObject* Py_compute_kinetic_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
 {
 	const char* syntax = "compute_kinetic_gausslet_integrals(gausslet_coeffs, grid)";
@@ -385,15 +421,18 @@ static PyObject* Py_compute_kinetic_gausslet_integrals(PyObject* Py_UNUSED(self)
 }
 
 
-static PyObject* Py_compute_kinetic_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
+static PyObject* Py_compute_nuclear_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
 {
-	const char* syntax = "compute_kinetic_gausslet_integral(gausslet_coeffs, grid_points)";
+	const char* syntax = "compute_nuclear_gausslet_integral(gausslet_coeffs, grid_points, nuclear_positions, nuclear_charges, tol)";
 
 	PyObject* py_gausslet_coeffs;
 	PyObject* py_grid_points;
+	PyObject* py_nuclear_positions;
+	PyObject* py_nuclear_charges;
+	double tol;
 
 	// parse input arguments
-	if (!PyArg_ParseTuple(args, "OO", &py_gausslet_coeffs, &py_grid_points)) {
+	if (!PyArg_ParseTuple(args, "OOOOd", &py_gausslet_coeffs, &py_grid_points, &py_nuclear_positions, &py_nuclear_charges, &tol)) {
 		char msg[1024];
 		sprintf(msg, "error parsing input; syntax: %s", syntax);
 		PyErr_SetString(PyExc_SyntaxError, msg);
@@ -412,12 +451,19 @@ static PyObject* Py_compute_kinetic_gausslet_integral(PyObject* Py_UNUSED(self),
 		return NULL;
 	}
 
-	// compute kinetic overlap integral
-	const double kgi = compute_kinetic_gausslet_integral(&gdata, grid_points);
+	// nuclei
+	struct nuclear_configuration nuclear_conf;
+	if (parse_nuclei(py_nuclear_positions, py_nuclear_charges, syntax, &nuclear_conf) < 0) {
+		return NULL;
+	}
 
+	// compute nuclear overlap integral
+	const double ngi = compute_nuclear_gausslet_integral(&gdata, grid_points, nuclear_conf.nuclei, nuclear_conf.num_nuclei, tol);
+
+	aligned_free(nuclear_conf.nuclei);
 	aligned_free(gdata.coefficients);
 
-	return PyFloat_FromDouble(kgi);
+	return PyFloat_FromDouble(ngi);
 }
 
 
@@ -481,18 +527,16 @@ static PyObject* Py_compute_nuclear_gausslet_integrals(PyObject* Py_UNUSED(self)
 }
 
 
-static PyObject* Py_compute_nuclear_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
+static PyObject* Py_compute_eri_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
 {
-	const char* syntax = "compute_nuclear_gausslet_integral(gausslet_coeffs, grid_points, nuclear_positions, nuclear_charges, tol)";
+	const char* syntax = "compute_eri_gausslet_integral(gausslet_coeffs, grid_points, tol)";
 
 	PyObject* py_gausslet_coeffs;
 	PyObject* py_grid_points;
-	PyObject* py_nuclear_positions;
-	PyObject* py_nuclear_charges;
 	double tol;
 
 	// parse input arguments
-	if (!PyArg_ParseTuple(args, "OOOOd", &py_gausslet_coeffs, &py_grid_points, &py_nuclear_positions, &py_nuclear_charges, &tol)) {
+	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid_points, &tol)) {
 		char msg[1024];
 		sprintf(msg, "error parsing input; syntax: %s", syntax);
 		PyErr_SetString(PyExc_SyntaxError, msg);
@@ -506,24 +550,17 @@ static PyObject* Py_compute_nuclear_gausslet_integral(PyObject* Py_UNUSED(self),
 	}
 
 	// grid points
-	union cartesian_grid_point_3d grid_points[2];
-	if (parse_cartesian_grid_points(py_grid_points, syntax, 2, grid_points) < 0) {
+	union cartesian_grid_point_3d grid_points[4];
+	if (parse_cartesian_grid_points(py_grid_points, syntax, 4, grid_points) < 0) {
 		return NULL;
 	}
 
-	// nuclei
-	struct nuclear_configuration nuclear_conf;
-	if (parse_nuclei(py_nuclear_positions, py_nuclear_charges, syntax, &nuclear_conf) < 0) {
-		return NULL;
-	}
+	// compute electron repulsion integral (ERI)
+	const double eri = compute_eri_gausslet_integral(&gdata, grid_points, tol);
 
-	// compute nuclear overlap integral
-	const double ngi = compute_nuclear_gausslet_integral(&gdata, grid_points, nuclear_conf.nuclei, nuclear_conf.num_nuclei, tol);
-
-	aligned_free(nuclear_conf.nuclei);
 	aligned_free(gdata.coefficients);
 
-	return PyFloat_FromDouble(ngi);
+	return PyFloat_FromDouble(eri);
 }
 
 
@@ -654,43 +691,6 @@ static PyObject* Py_compute_full_eri_gausslet_integrals(PyObject* Py_UNUSED(self
 }
 
 
-static PyObject* Py_compute_eri_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
-{
-	const char* syntax = "compute_eri_gausslet_integral(gausslet_coeffs, grid_points, tol)";
-
-	PyObject* py_gausslet_coeffs;
-	PyObject* py_grid_points;
-	double tol;
-
-	// parse input arguments
-	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid_points, &tol)) {
-		char msg[1024];
-		sprintf(msg, "error parsing input; syntax: %s", syntax);
-		PyErr_SetString(PyExc_SyntaxError, msg);
-		return NULL;
-	}
-
-	// Gausslet coefficients
-	struct gausslet_data gdata;
-	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
-		return NULL;
-	}
-
-	// grid points
-	union cartesian_grid_point_3d grid_points[4];
-	if (parse_cartesian_grid_points(py_grid_points, syntax, 4, grid_points) < 0) {
-		return NULL;
-	}
-
-	// compute electron repulsion integral (ERI)
-	const double eri = compute_eri_gausslet_integral(&gdata, grid_points, tol);
-
-	aligned_free(gdata.coefficients);
-
-	return PyFloat_FromDouble(eri);
-}
-
-
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Get the maximum number of OpenMP threads, or 0 if OpenMP is not available.
@@ -719,16 +719,22 @@ static PyMethodDef methods[] = {
 		.ml_doc   = "Convert a Cartesian grid point to a linear index.",
 	},
 	{
+		.ml_name  = "compute_kinetic_gausslet_integral",
+		.ml_meth  = Py_compute_kinetic_gausslet_integral,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Evaluate a single kinetic overlap integrals for Gausslet orbitals.",
+	},
+	{
 		.ml_name  = "compute_kinetic_gausslet_integrals",
 		.ml_meth  = Py_compute_kinetic_gausslet_integrals,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Evaluate the kinetic overlap integrals for Gausslet orbitals.",
 	},
 	{
-		.ml_name  = "compute_kinetic_gausslet_integral",
-		.ml_meth  = Py_compute_kinetic_gausslet_integral,
+		.ml_name  = "compute_nuclear_gausslet_integral",
+		.ml_meth  = Py_compute_nuclear_gausslet_integral,
 		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate a single kinetic overlap integrals for Gausslet orbitals.",
+		.ml_doc   = "Evaluate a single nuclear overlap integral for Gausslet orbitals and the specified nuclear positions.",
 	},
 	{
 		.ml_name  = "compute_nuclear_gausslet_integrals",
@@ -737,10 +743,10 @@ static PyMethodDef methods[] = {
 		.ml_doc   = "Evaluate the nuclear overlap integrals for Gausslet orbitals and the specified nuclear positions.",
 	},
 	{
-		.ml_name  = "compute_nuclear_gausslet_integral",
-		.ml_meth  = Py_compute_nuclear_gausslet_integral,
+		.ml_name  = "compute_eri_gausslet_integral",
+		.ml_meth  = Py_compute_eri_gausslet_integral,
 		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate a single nuclear overlap integral for Gausslet orbitals and the specified nuclear positions.",
+		.ml_doc   = "Evaluate a single electron repulsion integral (ERI) for Gausslet orbitals",
 	},
 	{
 		.ml_name  = "compute_eri_gausslet_integrals",
@@ -753,12 +759,6 @@ static PyMethodDef methods[] = {
 		.ml_meth  = Py_compute_full_eri_gausslet_integrals,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Evaluate the full electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals",
-	},
-	{
-		.ml_name  = "compute_eri_gausslet_integral",
-		.ml_meth  = Py_compute_eri_gausslet_integral,
-		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate a single electron repulsion integral (ERI) for Gausslet orbitals",
 	},
 	{
 		.ml_name  = "get_max_openmp_threads",
