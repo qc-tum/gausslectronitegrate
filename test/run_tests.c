@@ -15,6 +15,7 @@ struct test
 
 
 char* test_point_group_representation();
+char* test_grid_permutation();
 char* test_kinetic_integrals();
 char* test_nuclear_integrals();
 char* test_eri_integrals();
@@ -33,6 +34,7 @@ int main()
 
 	struct test tests[] = {
 		TEST_FUNCTION_ENTRY(test_point_group_representation),
+		TEST_FUNCTION_ENTRY(test_grid_permutation),
 		TEST_FUNCTION_ENTRY(test_kinetic_integrals),
 		TEST_FUNCTION_ENTRY(test_nuclear_integrals),
 		TEST_FUNCTION_ENTRY(test_eri_integrals),

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <math.h>
 #include <assert.h>
 
@@ -117,3 +118,15 @@ static inline double uniform_distance(const glong n, const double* x, const doub
 	}
 	return d;
 }
+
+
+//________________________________________________________________________________________________________________________
+//
+
+
+bool is_permutation(const glong* map, const glong n);
+
+bool is_identity_permutation(const glong* perm, const glong n);
+
+
+void compose_permutations(const glong n, const glong* p, const glong* q, glong* ret);
