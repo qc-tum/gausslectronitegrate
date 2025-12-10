@@ -52,6 +52,28 @@ static inline glong lmax(const glong a, const glong b)
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Floor integer division a / b (rounding toward negative infinity).
+///
+static inline glong lfloor_div(const glong a, const glong b)
+{
+	if (b < 0) {
+		return lfloor_div(-a, -b);
+	}
+
+	if (a >= 0)
+	{
+		return a / b;
+	}
+	else
+	{
+		// "/" operator performs truncation towards zero
+		return (a - b + 1) / b;
+	}
+}
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Norm (Euclidean length) of a vector in three dimensions.
 ///
 static inline double vec3_norm(const double v[3])

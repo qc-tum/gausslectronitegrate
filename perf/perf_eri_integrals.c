@@ -64,19 +64,14 @@ int main()
 	printf("Evaluating the electron repulsion integrals (ERIs) for Gausslet orbitals and %li grid points... ", num_points);
 	const uint64_t tick_start = get_time_ticks();
 	struct eri_gausslet_integrals eri;
-	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
+	compute_sparse_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
 	const uint64_t tick_end = get_time_ticks();
 	printf("Done.\n");
 
-	const glong num_points_trans = cartesian_grid_3d_num_points(&eri.grid_trans);
-	printf("number of points of translational grid: %li\n", num_points_trans);
-
 	// index of origin
-	const glong iorigin = cartesian_grid_3d_cartesian_to_linear_index(&eri.grid_trans,
-		-eri.grid_trans.coord_range[0].istart,
-		-eri.grid_trans.coord_range[1].istart,
-		-eri.grid_trans.coord_range[2].istart);
-	printf("ERI for all Gausslets at origin: %.17g\n", eri.integral_values[(iorigin * num_points_trans + iorigin) * num_points_trans + iorigin]);
+	union cartesian_grid_point_3d pt_origin = { 0 };
+	const glong iorigin = cartesian_grid_point_3d_to_linear_index(&grid, &pt_origin);
+	printf("ERI for all Gausslets at origin: %.17g\n", eri.integral_values[((iorigin * num_points + iorigin) * num_points + iorigin) * num_points + iorigin]);
 
 	printf("wall clock time: %g seconds\n", (tick_end - tick_start) / ticks_per_sec);
 

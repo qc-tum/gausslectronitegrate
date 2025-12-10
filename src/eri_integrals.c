@@ -209,20 +209,15 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals,
-/// exploiting translational invariance by subtracting the last orbital center:
-/// (i, j | k, l) -> (i - l, j - l | k - l, 0).
+/// exploiting translational invariance by only computing integrals with
+/// the center of the enclosing box of the orbital grid points at the origin.
 ///
-void compute_eri_gausslet_integrals(
+void compute_sparse_eri_gausslet_integrals(
 	const struct gausslet_data* gdata, const struct cartesian_grid_3d* grid,
 	const double tol, struct eri_gausslet_integrals* eri)
 {
 	// copy grid information
 	eri->grid = *grid;
-
-	// grid of translated coordinates after subtracting the last orbital center: (i, j | k, l) -> (i - l, j - l | k - l, 0)
-	eri->grid_trans.coord_range[0] = range_minus(grid->coord_range[0], grid->coord_range[0]);
-	eri->grid_trans.coord_range[1] = range_minus(grid->coord_range[1], grid->coord_range[1]);
-	eri->grid_trans.coord_range[2] = range_minus(grid->coord_range[2], grid->coord_range[2]);
 
 	const double prefac = cubic_power(M_PI / 9.);
 
@@ -243,245 +238,160 @@ void compute_eri_gausslet_integrals(
 		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
-	const glong num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
-	eri->integral_values = aligned_calloc(num_points_trans * num_points_trans * num_points_trans * sizeof(eri->integral_values[0]));
+	const glong num_points = cartesian_grid_3d_num_points(grid);
+	eri->integral_values = aligned_calloc(num_points * num_points * num_points * num_points * sizeof(eri->integral_values[0]));
 
-	// index corresponding to logical coordinate zero
-	const glong lcx = -eri->grid_trans.coord_range[0].istart;
-	const glong lcy = -eri->grid_trans.coord_range[1].istart;
-	const glong lcz = -eri->grid_trans.coord_range[2].istart;
+	// TODO: exploit lattice symmetries described by the octahedral point group
 
-	#pragma omp parallel for schedule(dynamic) collapse(2)
-	for (glong icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
+	#pragma omp parallel for schedule(dynamic) collapse(4)
+	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
 	{
-		for (glong jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < grid->coord_range[0].num; ++jcx)
 		{
-			if (labs(icx - jcx) > grid->coord_range[0].num - 1) {
-				continue;
-			}
-			// use reflection symmetry to avoid redundant calculations
-			for (glong kcx = -eri->grid_trans.coord_range[0].istart; kcx < eri->grid_trans.coord_range[0].num; ++kcx)
+			for (glong kcx = 0; kcx < grid->coord_range[0].num; ++kcx)
 			{
-				if (labs(icx - kcx) > grid->coord_range[0].num - 1 || labs(jcx - kcx) > grid->coord_range[0].num - 1) {
-					continue;
-				}
-
-				const double center_diff_x = 0.5 * ((icx + jcx) - (kcx + lcx));
-
-				const glong ishift_ij_x   = (icx - jcx) - gfp.shifts.istart;
-				const glong ishift_kl_x   = (kcx - lcx) - gfp.shifts.istart;
-				assert(0 <= ishift_ij_x && ishift_ij_x < gfp.shifts.num);
-				assert(0 <= ishift_kl_x && ishift_kl_x < gfp.shifts.num);
-				const glong ishift_ijkl_x = ishift_ij_x * gfp.shifts.num + ishift_kl_x;
-				const double* products_x  = gfp.products[ishift_ijkl_x];
-				const glong istart_x      = gfp.indices [ishift_ijkl_x].istart;
-				const glong num_x         = gfp.indices [ishift_ijkl_x].num;
-
-				for (glong icy = 0; icy < eri->grid_trans.coord_range[1].num; ++icy)
+				for (glong lcx = 0; lcx < grid->coord_range[0].num; ++lcx)
 				{
-					for (glong jcy = 0; jcy < eri->grid_trans.coord_range[1].num; ++jcy)
+					// exploit translational invariance
 					{
-						if (labs(icy - jcy) > grid->coord_range[1].num - 1) {
+						// x-coordinate of orbital box center times 2
+						const glong center_x = 2 * grid->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
+						                                                         lmax(lmax(lmax(icx, jcx), kcx), lcx);
+						// not using integer division by 2 due to rounding towards zero
+						if (center_x < 0 || center_x >= 2) {
 							continue;
 						}
-						// use reflection symmetry to avoid redundant calculations
-						for (glong kcy = -eri->grid_trans.coord_range[1].istart; kcy < eri->grid_trans.coord_range[1].num; ++kcy)
+					}
+
+					const double center_diff_x = 0.5 * ((icx + jcx) - (kcx + lcx));
+					const double* products_x;
+					glong istart_x, num_x;
+					{
+						const glong ishift01 = (icx - jcx) - gfp.shifts.istart;
+						const glong ishift23 = (kcx - lcx) - gfp.shifts.istart;
+						assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
+						assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
+						const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
+						products_x = gfp.products[ishift0123];
+						istart_x   = gfp.indices [ishift0123].istart;
+						num_x      = gfp.indices [ishift0123].num;
+					}
+
+					for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
+					{
+						for (glong jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
 						{
-							if (labs(icy - kcy) > grid->coord_range[1].num - 1 || labs(jcy - kcy) > grid->coord_range[1].num - 1) {
-								continue;
-							}
-
-							const double center_diff_y = 0.5 * ((icy + jcy) - (kcy + lcy));
-
-							const glong ishift_ij_y   = (icy - jcy) - gfp.shifts.istart;
-							const glong ishift_kl_y   = (kcy - lcy) - gfp.shifts.istart;
-							assert(0 <= ishift_ij_y && ishift_ij_y < gfp.shifts.num);
-							assert(0 <= ishift_kl_y && ishift_kl_y < gfp.shifts.num);
-							const glong ishift_ijkl_y = ishift_ij_y * gfp.shifts.num + ishift_kl_y;
-							const double* products_y  = gfp.products[ishift_ijkl_y];
-							const glong istart_y      = gfp.indices [ishift_ijkl_y].istart;
-							const glong num_y         = gfp.indices [ishift_ijkl_y].num;
-
-							for (glong icz = 0; icz < eri->grid_trans.coord_range[2].num; ++icz)
+							for (glong kcy = 0; kcy < grid->coord_range[1].num; ++kcy)
 							{
-								for (glong jcz = 0; jcz < eri->grid_trans.coord_range[2].num; ++jcz)
+								for (glong lcy = 0; lcy < grid->coord_range[1].num; ++lcy)
 								{
-									if (labs(icz - jcz) > grid->coord_range[2].num - 1) {
-										continue;
-									}
-									// use reflection symmetry to avoid redundant calculations
-									for (glong kcz = -eri->grid_trans.coord_range[2].istart; kcz < eri->grid_trans.coord_range[2].num; ++kcz)
+									// exploit translational invariance
 									{
-										if (labs(icz - kcz) > grid->coord_range[2].num - 1 || labs(jcz - kcz) > grid->coord_range[2].num - 1) {
+										// y-coordinate of orbital box center times 2
+										const glong center_y = 2 * grid->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
+										                                                         lmax(lmax(lmax(icy, jcy), kcy), lcy);
+										// not using integer division by 2 due to rounding towards zero
+										if (center_y < 0 || center_y >= 2) {
 											continue;
 										}
+									}
 
-										const double center_diff_z = 0.5 * ((icz + jcz) - (kcz + lcz));
+									const double center_diff_y = 0.5 * ((icy + jcy) - (kcy + lcy));
+									const double* products_y;
+									glong istart_y, num_y;
+									{
+										const glong ishift01 = (icy - jcy) - gfp.shifts.istart;
+										const glong ishift23 = (kcy - lcy) - gfp.shifts.istart;
+										assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
+										assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
+										const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
+										products_y = gfp.products[ishift0123];
+										istart_y   = gfp.indices [ishift0123].istart;
+										num_y      = gfp.indices [ishift0123].num;
+									}
 
-										const glong ishift_ij_z   = (icz - jcz) - gfp.shifts.istart;
-										const glong ishift_kl_z   = (kcz - lcz) - gfp.shifts.istart;
-										assert(0 <= ishift_ij_z && ishift_ij_z < gfp.shifts.num);
-										assert(0 <= ishift_kl_z && ishift_kl_z < gfp.shifts.num);
-										const glong ishift_ijkl_z = ishift_ij_z * gfp.shifts.num + ishift_kl_z;
-										const double* products_z  = gfp.products[ishift_ijkl_z];
-										const glong istart_z      = gfp.indices [ishift_ijkl_z].istart;
-										const glong num_z         = gfp.indices [ishift_ijkl_z].num;
-
-										const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx, icy, icz);
-										const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx, jcy, jcz);
-										// use permutation symmetry to avoid redundant calculations
-										if (idx_i < idx_j) {
-											continue;
-										}
-										const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx, kcy, kcz);
-
-										double val = 0;
-										double pt[3];
-										for (glong sx = 0; sx < num_x; ++sx)
+									for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
+									{
+										for (glong jcz = 0; jcz < grid->coord_range[2].num; ++jcz)
 										{
-											if (fabs(products_x[sx]) <= tol) {
-												continue;
-											}
-
-											pt[0] = center_diff_x + (istart_x + sx) / 6.0;
-
-											for (glong sy = 0; sy < num_y; ++sy)
+											for (glong kcz = 0; kcz < grid->coord_range[2].num; ++kcz)
 											{
-												if (fabs(products_y[sy]) <= tol) {
-													continue;
-												}
-
-												pt[1] = center_diff_y + (istart_y + sy) / 6.0;
-
-												for (glong sz = 0; sz < num_z; ++sz)
+												for (glong lcz = 0; lcz < grid->coord_range[2].num; ++lcz)
 												{
-													if (fabs(products_z[sz]) <= tol) {
+													// exploit translational invariance
+													{
+														// z-coordinate of orbital box center times 2
+														const glong center_z = 2 * grid->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
+														                                                         lmax(lmax(lmax(icz, jcz), kcz), lcz);
+														// not using integer division by 2 due to rounding towards zero
+														if (center_z < 0 || center_z >= 2) {
+															continue;
+														}
+													}
+
+													const double center_diff_z = 0.5 * ((icz + jcz) - (kcz + lcz));
+													const double* products_z;
+													glong istart_z, num_z;
+													{
+														const glong ishift01 = (icz - jcz) - gfp.shifts.istart;
+														const glong ishift23 = (kcz - lcz) - gfp.shifts.istart;
+														assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
+														assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
+														const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
+														products_z = gfp.products[ishift0123];
+														istart_z   = gfp.indices [ishift0123].istart;
+														num_z      = gfp.indices [ishift0123].num;
+													}
+
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
+													// use permutation symmetry to avoid redundant calculations
+													if (idx_i > idx_j) {
+														continue;
+													}
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx, lcy, lcz);
+													// use permutation symmetry to avoid redundant calculations
+													if (idx_k > idx_l) {
 														continue;
 													}
 
-													pt[2] = center_diff_z + (istart_z + sz) / 6.0;
+													double val = 0;
+													double pt[3];
+													for (glong sx = 0; sx < num_x; ++sx)
+													{
+														if (fabs(products_x[sx]) <= tol) {
+															continue;
+														}
 
-													val += products_x[sx] * products_y[sy] * products_z[sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
+														pt[0] = center_diff_x + (istart_x + sx) / 6.0;
+
+														for (glong sy = 0; sy < num_y; ++sy)
+														{
+															if (fabs(products_y[sy]) <= tol) {
+																continue;
+															}
+
+															pt[1] = center_diff_y + (istart_y + sy) / 6.0;
+
+															for (glong sz = 0; sz < num_z; ++sz)
+															{
+																if (fabs(products_z[sz]) <= tol) {
+																	continue;
+																}
+
+																pt[2] = center_diff_z + (istart_z + sz) / 6.0;
+
+																val += products_x[sx] * products_y[sy] * products_z[sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
+															}
+														}
+													}
+													val *= prefac;
+
+													eri->integral_values[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l] = val;
 												}
 											}
 										}
-										val *= prefac;
-
-										eri->integral_values[(idx_i * num_points_trans + idx_j) * num_points_trans + idx_k] = val;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// fill omitted entries according to symmetries
-	#pragma omp parallel for schedule(dynamic) collapse(2)
-	for (glong icx = 0; icx < eri->grid_trans.coord_range[0].num; ++icx)
-	{
-		for (glong jcx = 0; jcx < eri->grid_trans.coord_range[0].num; ++jcx)
-		{
-			if (labs(icx - jcx) > grid->coord_range[0].num - 1) {
-				continue;
-			}
-			for (glong kcx = 0; kcx < eri->grid_trans.coord_range[0].num; ++kcx)
-			{
-				if (labs(icx - kcx) > grid->coord_range[0].num - 1 || labs(jcx - kcx) > grid->coord_range[0].num - 1) {
-					continue;
-				}
-
-				glong icx_p, jcx_p, kcx_p;
-				if (eri->grid_trans.coord_range[0].istart + kcx >= 0)
-				{
-					icx_p = icx;
-					jcx_p = jcx;
-					kcx_p = kcx;
-				}
-				else
-				{
-					// logical reflection
-					icx_p = -icx - 2 * eri->grid_trans.coord_range[0].istart;
-					jcx_p = -jcx - 2 * eri->grid_trans.coord_range[0].istart;
-					kcx_p = -kcx - 2 * eri->grid_trans.coord_range[0].istart;
-				}
-
-				for (glong icy = 0; icy < eri->grid_trans.coord_range[1].num; ++icy)
-				{
-					for (glong jcy = 0; jcy < eri->grid_trans.coord_range[1].num; ++jcy)
-					{
-						if (labs(icy - jcy) > grid->coord_range[1].num - 1) {
-							continue;
-						}
-						for (glong kcy = 0; kcy < eri->grid_trans.coord_range[1].num; ++kcy)
-						{
-							if (labs(icy - kcy) > grid->coord_range[1].num - 1 || labs(jcy - kcy) > grid->coord_range[1].num - 1) {
-								continue;
-							}
-
-							glong icy_p, jcy_p, kcy_p;
-							if (eri->grid_trans.coord_range[1].istart + kcy >= 0)
-							{
-								icy_p = icy;
-								jcy_p = jcy;
-								kcy_p = kcy;
-							}
-							else
-							{
-								// logical reflection
-								icy_p = -icy - 2 * eri->grid_trans.coord_range[1].istart;
-								jcy_p = -jcy - 2 * eri->grid_trans.coord_range[1].istart;
-								kcy_p = -kcy - 2 * eri->grid_trans.coord_range[1].istart;
-							}
-
-							for (glong icz = 0; icz < eri->grid_trans.coord_range[2].num; ++icz)
-							{
-								for (glong jcz = 0; jcz < eri->grid_trans.coord_range[2].num; ++jcz)
-								{
-									if (labs(icz - jcz) > grid->coord_range[2].num - 1) {
-										continue;
-									}
-									for (glong kcz = 0; kcz < eri->grid_trans.coord_range[2].num; ++kcz)
-									{
-										if (labs(icz - kcz) > grid->coord_range[2].num - 1 || labs(jcz - kcz) > grid->coord_range[2].num - 1) {
-											continue;
-										}
-
-										glong icz_p, jcz_p, kcz_p;
-										if (eri->grid_trans.coord_range[2].istart + kcz >= 0)
-										{
-											icz_p = icz;
-											jcz_p = jcz;
-											kcz_p = kcz;
-										}
-										else
-										{
-											// logical reflection
-											icz_p = -icz - 2 * eri->grid_trans.coord_range[2].istart;
-											jcz_p = -jcz - 2 * eri->grid_trans.coord_range[2].istart;
-											kcz_p = -kcz - 2 * eri->grid_trans.coord_range[2].istart;
-										}
-
-										const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx, icy, icz);
-										const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx, jcy, jcz);
-										const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx, kcy, kcz);
-
-										glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, icx_p, icy_p, icz_p);
-										glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, jcx_p, jcy_p, jcz_p);
-										glong idx_k_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, kcx_p, kcy_p, kcz_p);
-
-										if (idx_i_p < idx_j_p)
-										{
-											// swap according to permutation symmetry
-											glong tmp = idx_i_p;
-											idx_i_p = idx_j_p;
-											idx_j_p = tmp;
-										}
-
-										eri->integral_values[(idx_i * num_points_trans + idx_j) * num_points_trans + idx_k]
-											= eri->integral_values[(idx_i_p * num_points_trans + idx_j_p) * num_points_trans + idx_k_p];
 									}
 								}
 							}
@@ -493,77 +403,203 @@ void compute_eri_gausslet_integrals(
 	}
 
 	delete_gausslet_factor_products(&gfp);
+
+	// fill omitted entries according to permutation symmetries i <-> j and k <-> l
+	#pragma omp parallel for schedule(dynamic) collapse(4)
+	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
+	{
+		for (glong jcx = 0; jcx < grid->coord_range[0].num; ++jcx)
+		{
+			for (glong kcx = 0; kcx < grid->coord_range[0].num; ++kcx)
+			{
+				for (glong lcx = 0; lcx < grid->coord_range[0].num; ++lcx)
+				{
+					// exploit translational invariance
+					{
+						// x-coordinate of orbital box center times 2
+						const glong center_x = 2 * grid->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
+						                                                         lmax(lmax(lmax(icx, jcx), kcx), lcx);
+						// not using integer division by 2 due to rounding towards zero
+						if (center_x < 0 || center_x >= 2) {
+							continue;
+						}
+					}
+
+					for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
+					{
+						for (glong jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
+						{
+							for (glong kcy = 0; kcy < grid->coord_range[1].num; ++kcy)
+							{
+								for (glong lcy = 0; lcy < grid->coord_range[1].num; ++lcy)
+								{
+									// exploit translational invariance
+									{
+										// y-coordinate of orbital box center times 2
+										const glong center_y = 2 * grid->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
+										                                                         lmax(lmax(lmax(icy, jcy), kcy), lcy);
+										// not using integer division by 2 due to rounding towards zero
+										if (center_y < 0 || center_y >= 2) {
+											continue;
+										}
+									}
+
+									for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
+									{
+										for (glong jcz = 0; jcz < grid->coord_range[2].num; ++jcz)
+										{
+											for (glong kcz = 0; kcz < grid->coord_range[2].num; ++kcz)
+											{
+												for (glong lcz = 0; lcz < grid->coord_range[2].num; ++lcz)
+												{
+													// exploit translational invariance
+													{
+														// z-coordinate of orbital box center times 2
+														const glong center_z = 2 * grid->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
+														                                                         lmax(lmax(lmax(icz, jcz), kcz), lcz);
+														// not using integer division by 2 due to rounding towards zero
+														if (center_z < 0 || center_z >= 2) {
+															continue;
+														}
+													}
+
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx, lcy, lcz);
+
+													if (idx_i <= idx_j && idx_k <= idx_l) {
+														// entry has already been set
+														continue;
+													}
+
+													glong idx_i_p, idx_j_p;
+													if (idx_i <= idx_j)
+													{
+														idx_i_p = idx_i;
+														idx_j_p = idx_j;
+													}
+													else
+													{
+														idx_i_p = idx_j;
+														idx_j_p = idx_i;
+													}
+													glong idx_k_p, idx_l_p;
+													if (idx_k <= idx_l)
+													{
+														idx_k_p = idx_k;
+														idx_l_p = idx_l;
+													}
+													else
+													{
+														idx_k_p = idx_l;
+														idx_l_p = idx_k;
+													}
+
+													eri->integral_values[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l] =
+														eri->integral_values[((idx_i_p * num_points + idx_j_p) * num_points + idx_k_p) * num_points + idx_l_p];
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Reconstruct the full electron repulsion integral (ERI) tensor of degree four (without using translational invariance).
+/// \brief Fill all entries of the dense electron repulsion integral (ERI) tensor of degree four,
+/// assuming that 'eri_dense' has been allocated already.
 ///
-void reconstruct_full_eri_tensor(const struct eri_gausslet_integrals* eri, double* full_tensor)
+void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_sparse, struct eri_gausslet_integrals* restrict eri_dense)
 {
-	const glong num_points       = cartesian_grid_3d_num_points(&eri->grid);
-	const glong num_points_trans = cartesian_grid_3d_num_points(&eri->grid_trans);
+	const glong num_points_sparse = cartesian_grid_3d_num_points(&eri_sparse->grid);
+	const glong num_points_dense  = cartesian_grid_3d_num_points(&eri_dense->grid);
+	assert(num_points_sparse > 0);
+	assert(num_points_dense  > 0);
 
-	#pragma omp parallel for collapse(12)
-	for (glong icx = 0; icx < eri->grid.coord_range[0].num; ++icx)
+	#pragma omp parallel for collapse(4)
+	for (glong icx = 0; icx < eri_dense->grid.coord_range[0].num; ++icx)
 	{
-		for (glong jcx = 0; jcx < eri->grid.coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < eri_dense->grid.coord_range[0].num; ++jcx)
 		{
-			for (glong kcx = 0; kcx < eri->grid.coord_range[0].num; ++kcx)
+			for (glong kcx = 0; kcx < eri_dense->grid.coord_range[0].num; ++kcx)
 			{
-				for (glong lcx = 0; lcx < eri->grid.coord_range[0].num; ++lcx)
+				for (glong lcx = 0; lcx < eri_dense->grid.coord_range[0].num; ++lcx)
 				{
+					// x-coordinate of orbital box center times 2
+					const glong center_x = 2 * eri_dense->grid.coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
+					                                                                   lmax(lmax(lmax(icx, jcx), kcx), lcx);
+					const glong trans_x = lfloor_div(center_x, 2);
+					assert(0 <= center_x - 2 * trans_x && center_x - 2 * trans_x < 2);
 
-					for (glong icy = 0; icy < eri->grid.coord_range[1].num; ++icy)
+					for (glong icy = 0; icy < eri_dense->grid.coord_range[1].num; ++icy)
 					{
-						for (glong jcy = 0; jcy < eri->grid.coord_range[1].num; ++jcy)
+						for (glong jcy = 0; jcy < eri_dense->grid.coord_range[1].num; ++jcy)
 						{
-							for (glong kcy = 0; kcy < eri->grid.coord_range[1].num; ++kcy)
+							for (glong kcy = 0; kcy < eri_dense->grid.coord_range[1].num; ++kcy)
 							{
-								for (glong lcy = 0; lcy < eri->grid.coord_range[1].num; ++lcy)
+								for (glong lcy = 0; lcy < eri_dense->grid.coord_range[1].num; ++lcy)
 								{
+									// y-coordinate of orbital box center times 2
+									const glong center_y = 2 * eri_dense->grid.coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
+									                                                                   lmax(lmax(lmax(icy, jcy), kcy), lcy);
+									const glong trans_y = lfloor_div(center_y, 2);
+									assert(0 <= center_y - 2 * trans_y && center_y - 2 * trans_y < 2);
 
-									for (glong icz = 0; icz < eri->grid.coord_range[2].num; ++icz)
+									for (glong icz = 0; icz < eri_dense->grid.coord_range[2].num; ++icz)
 									{
-										for (glong jcz = 0; jcz < eri->grid.coord_range[2].num; ++jcz)
+										for (glong jcz = 0; jcz < eri_dense->grid.coord_range[2].num; ++jcz)
 										{
-											for (glong kcz = 0; kcz < eri->grid.coord_range[2].num; ++kcz)
+											for (glong kcz = 0; kcz < eri_dense->grid.coord_range[2].num; ++kcz)
 											{
-												for (glong lcz = 0; lcz < eri->grid.coord_range[2].num; ++lcz)
+												for (glong lcz = 0; lcz < eri_dense->grid.coord_range[2].num; ++lcz)
 												{
+													// z-coordinate of orbital box center times 2
+													const glong center_z = 2 * eri_dense->grid.coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
+													                                                                   lmax(lmax(lmax(icz, jcz), kcz), lcz);
+													const glong trans_z = lfloor_div(center_z, 2);
+													assert(0 <= center_z - 2 * trans_z && center_z - 2 * trans_z < 2);
 
-													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx, icy, icz);
-													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx, jcy, jcz);
-													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx, kcy, kcz);
-													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx, lcy, lcz);
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, jcx, jcy, jcz);
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, lcx, lcy, lcz);
 
-													if (idx_i < idx_j) {
-														continue;
-													}
-													if (idx_k < idx_l) {
-														continue;
-													}
-													if ((idx_i < idx_k) || (idx_i == idx_k && idx_j < idx_l)) {
-														continue;
-													}
+													const union cartesian_grid_point_3d pt_i_p = {
+														.x = eri_dense->grid.coord_range[0].istart + icx - trans_x,
+														.y = eri_dense->grid.coord_range[1].istart + icy - trans_y,
+														.z = eri_dense->grid.coord_range[2].istart + icz - trans_z,
+													};
+													const union cartesian_grid_point_3d pt_j_p = {
+														.x = eri_dense->grid.coord_range[0].istart + jcx - trans_x,
+														.y = eri_dense->grid.coord_range[1].istart + jcy - trans_y,
+														.z = eri_dense->grid.coord_range[2].istart + jcz - trans_z,
+													};
+													const union cartesian_grid_point_3d pt_k_p = {
+														.x = eri_dense->grid.coord_range[0].istart + kcx - trans_x,
+														.y = eri_dense->grid.coord_range[1].istart + kcy - trans_y,
+														.z = eri_dense->grid.coord_range[2].istart + kcz - trans_z,
+													};
+													const union cartesian_grid_point_3d pt_l_p = {
+														.x = eri_dense->grid.coord_range[0].istart + lcx - trans_x,
+														.y = eri_dense->grid.coord_range[1].istart + lcy - trans_y,
+														.z = eri_dense->grid.coord_range[2].istart + lcz - trans_z,
+													};
+													const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_i_p);
+													const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_j_p);
+													const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_k_p);
+													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_l_p);
 
-													const glong idx_il = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (icx - lcx) - eri->grid_trans.coord_range[0].istart, (icy - lcy) - eri->grid_trans.coord_range[1].istart, (icz - lcz) - eri->grid_trans.coord_range[2].istart);
-													const glong idx_jl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (jcx - lcx) - eri->grid_trans.coord_range[0].istart, (jcy - lcy) - eri->grid_trans.coord_range[1].istart, (jcz - lcz) - eri->grid_trans.coord_range[2].istart);
-													const glong idx_kl = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid_trans, (kcx - lcx) - eri->grid_trans.coord_range[0].istart, (kcy - lcy) - eri->grid_trans.coord_range[1].istart, (kcz - lcz) - eri->grid_trans.coord_range[2].istart);
-
-													const double val = eri->integral_values[(idx_il * num_points_trans + idx_jl) * num_points_trans + idx_kl];
-
-													// explicitly impose symmetries
-													full_tensor[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l] = val;
-													full_tensor[((idx_j * num_points + idx_i) * num_points + idx_k) * num_points + idx_l] = val;  // i <-> j
-													full_tensor[((idx_i * num_points + idx_j) * num_points + idx_l) * num_points + idx_k] = val;  // k <-> l
-													full_tensor[((idx_j * num_points + idx_i) * num_points + idx_l) * num_points + idx_k] = val;  // i <-> j, k <-> l
-													// analogous version with (i, j) <-> (k, l)
-													full_tensor[((idx_k * num_points + idx_l) * num_points + idx_i) * num_points + idx_j] = val;
-													full_tensor[((idx_l * num_points + idx_k) * num_points + idx_i) * num_points + idx_j] = val;  // k <-> l
-													full_tensor[((idx_k * num_points + idx_l) * num_points + idx_j) * num_points + idx_i] = val;  // i <-> j
-													full_tensor[((idx_l * num_points + idx_k) * num_points + idx_j) * num_points + idx_i] = val;  // i <-> j, k <-> l
+													eri_dense->integral_values[((idx_i * num_points_dense + idx_j) * num_points_dense + idx_k) * num_points_dense + idx_l] =
+														eri_sparse->integral_values[((idx_i_p * num_points_sparse + idx_j_p) * num_points_sparse + idx_k_p) * num_points_sparse + idx_l_p];
 												}
 											}
 										}

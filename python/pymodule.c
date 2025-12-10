@@ -627,102 +627,32 @@ static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), Py
 		return NULL;
 	}
 
-	// compute electron repulsion integrals (ERIs)
-	struct eri_gausslet_integrals eri;
-	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
-
-	// create NumPy array of degree 3 containing integral values (first return value)
-	const glong num_points_trans = cartesian_grid_3d_num_points(&eri.grid_trans);
-	npy_intp dims[3] = { num_points_trans, num_points_trans, num_points_trans };
-	PyArrayObject* py_integral_values = (PyArrayObject*)PyArray_SimpleNew(3, dims, NPY_DOUBLE);
-	if (py_integral_values == NULL) {
-		char msg[1024];
-		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
-		PyErr_SetString(PyExc_RuntimeError, msg);
-		return NULL;
-	}
-	memcpy(PyArray_DATA(py_integral_values), eri.integral_values, num_points_trans * num_points_trans * num_points_trans * sizeof(eri.integral_values[0]));
-
-	// create translational grid specification (second return value)
-	PyObject* py_grid_trans = PyList_New(3);
-	if (py_grid_trans == NULL) {
-		char msg[1024];
-		sprintf(msg, "error creating list for return value; syntax: %s", syntax);
-		PyErr_SetString(PyExc_RuntimeError, msg);
-		return NULL;
-	}
-	for (int i = 0; i < 3; ++i)
-	{
-		PyObject* py_coord_range = PyTuple_Pack(2,
-			PyLong_FromLong(eri.grid_trans.coord_range[i].istart),
-			PyLong_FromLong(eri.grid_trans.coord_range[i].num));
-
-		if (PyList_SetItem(py_grid_trans, i, py_coord_range) < 0) {
-			Py_DECREF(py_grid_trans);
-			char msg[1024];
-			sprintf(msg, "error setting list item for return value; syntax: %s", syntax);
-			PyErr_SetString(PyExc_RuntimeError, msg);
-			return NULL;
-		}
-	}
-
-	delete_eri_gausslet_integrals(&eri);
-	aligned_free(gdata.coefficients);
-
-	return PyTuple_Pack(2, py_integral_values, py_grid_trans);
-}
-
-
-static PyObject* Py_compute_full_eri_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
-{
-	const char* syntax = "compute_full_eri_gausslet_integrals(gausslet_coeffs, grid, tol)";
-
-	PyObject* py_gausslet_coeffs;
-	PyObject* py_grid;
-	double tol;
-
-	// parse input arguments
-	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid, &tol)) {
-		char msg[1024];
-		sprintf(msg, "error parsing input; syntax: %s", syntax);
-		PyErr_SetString(PyExc_SyntaxError, msg);
-		return NULL;
-	}
-
-	// Gausslet coefficients
-	struct gausslet_data gdata;
-	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
-		return NULL;
-	}
-
-	// grid specification
-	struct cartesian_grid_3d grid;
-	if (parse_cartesian_grid(py_grid, syntax, &grid) < 0) {
-		return NULL;
-	}
-
 	// compute electron repulsion integrals (ERIs), exploiting translational invariance
-	struct eri_gausslet_integrals eri;
-	compute_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
+	struct eri_gausslet_integrals eri_sparse;
+	compute_sparse_eri_gausslet_integrals(&gdata, &grid, tol, &eri_sparse);
+	aligned_free(gdata.coefficients);
 
 	// create NumPy array of degree 4 to store the full ERI tensor
 	const glong num_points = cartesian_grid_3d_num_points(&grid);
 	npy_intp dims[4] = { num_points, num_points, num_points, num_points };
-	PyArrayObject* py_full_tensor = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
-	if (py_full_tensor == NULL) {
+	PyArrayObject* py_eri_tensor = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
+	if (py_eri_tensor == NULL) {
 		char msg[1024];
 		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
 		PyErr_SetString(PyExc_RuntimeError, msg);
 		return NULL;
 	}
 
-	// reconstruct full tensor
-	reconstruct_full_eri_tensor(&eri, PyArray_DATA(py_full_tensor));
+	// fill dense tensor entries
+	struct eri_gausslet_integrals eri_dense = {
+		.integral_values = PyArray_DATA(py_eri_tensor),
+		.grid = grid,
+	};
+	fill_dense_eri_tensor(&eri_sparse, &eri_dense);
 
-	delete_eri_gausslet_integrals(&eri);
-	aligned_free(gdata.coefficients);
+	delete_eri_gausslet_integrals(&eri_sparse);
 
-	return (PyObject*)py_full_tensor;
+	return (PyObject*)py_eri_tensor;
 }
 
 
@@ -793,13 +723,7 @@ static PyMethodDef methods[] = {
 		.ml_name  = "compute_eri_gausslet_integrals",
 		.ml_meth  = Py_compute_eri_gausslet_integrals,
 		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals, exploiting translational invariance by subtracting the last orbital center",
-	},
-	{
-		.ml_name  = "compute_full_eri_gausslet_integrals",
-		.ml_meth  = Py_compute_full_eri_gausslet_integrals,
-		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate the full electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals",
+		.ml_doc   = "Evaluate the electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals",
 	},
 	{
 		.ml_name  = "get_max_openmp_threads",

@@ -14,7 +14,7 @@ bool is_permutation(const glong* map, const glong n)
 		}
 	}
 
-	bool* indicator = aligned_calloc(n * sizeof(bool));
+	bool* indicator = aligned_calloc(n * sizeof(indicator[0]));
 	for (glong i = 0; i < n; i++) {
 		indicator[map[i]] = true;
 	}
