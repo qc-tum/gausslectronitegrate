@@ -627,9 +627,22 @@ static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), Py
 		return NULL;
 	}
 
+	// extend to a rotationally symmetric grid for the "sparse" calculation
+	const glong extent = lmax(lmax(
+		lmax(labs(grid.coord_range[0].istart), labs(grid.coord_range[0].istart + grid.coord_range[0].num - 1)),
+		lmax(labs(grid.coord_range[1].istart), labs(grid.coord_range[1].istart + grid.coord_range[1].num - 1))),
+		lmax(labs(grid.coord_range[2].istart), labs(grid.coord_range[2].istart + grid.coord_range[2].num - 1)));
+	struct cartesian_grid_3d grid_sparse = {
+		.coord_range = {
+			{ .istart = -extent, .num = 2 * extent + 1 },
+			{ .istart = -extent, .num = 2 * extent + 1 },
+			{ .istart = -extent, .num = 2 * extent + 1 },
+		}
+	};
+
 	// compute electron repulsion integrals (ERIs), exploiting translational invariance
 	struct eri_gausslet_integrals eri_sparse;
-	compute_sparse_eri_gausslet_integrals(&gdata, &grid, tol, &eri_sparse);
+	compute_sparse_eri_gausslet_integrals(&gdata, &grid_sparse, tol, &eri_sparse);
 	aligned_free(gdata.coefficients);
 
 	// create NumPy array of degree 4 to store the full ERI tensor

@@ -9,6 +9,8 @@
 /// \brief Universal "long" integer.
 typedef int64_t glong;
 
+#define GLONG_MAX INT64_MAX
+
 
 //________________________________________________________________________________________________________________________
 ///
@@ -47,28 +49,6 @@ static inline glong lmin(const glong a, const glong b)
 static inline glong lmax(const glong a, const glong b)
 {
 	return (a >= b) ? a : b;
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Floor integer division a / b (rounding toward negative infinity).
-///
-static inline glong lfloor_div(const glong a, const glong b)
-{
-	if (b < 0) {
-		return lfloor_div(-a, -b);
-	}
-
-	if (a >= 0)
-	{
-		return a / b;
-	}
-	else
-	{
-		// "/" operator performs truncation towards zero
-		return (a - b + 1) / b;
-	}
 }
 
 

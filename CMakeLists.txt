@@ -22,7 +22,7 @@ set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -Wextra")
 
 set(GAUSSLECTRONITEGRATE_INCLUDE_DIRS "include")
 set(GAUSSLECTRONITEGRATE_SOURCES "src/gausslet_factors.c" "src/matrix.c" "src/symmetry.c" "src/kinetic_integrals.c" "src/nuclear_integrals.c" "src/eri_integrals.c" "src/util.c" "src/hdf5_util.c" "src/timing.c")
-set(TEST_SOURCES "test/test_symmetry.c" "test/test_kinetic_integrals.c" "test/test_nuclear_integrals.c" "test/test_eri_integrals.c" "test/test_util.c" "test/run_tests.c")
+set(TEST_SOURCES "test/test_symmetry.c" "test/test_kinetic_integrals.c" "test/test_nuclear_integrals.c" "test/test_eri_integrals.c" "test/run_tests.c")
 
 add_library(               gausslectronitegrate_lib ${GAUSSLECTRONITEGRATE_SOURCES})
 target_include_directories(gausslectronitegrate_lib PUBLIC ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS})
@@ -55,7 +55,7 @@ endif()
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)  # test whether current project is a stand-alone project
     add_executable(            perf_eri_integrals ${GAUSSLECTRONITEGRATE_SOURCES} "perf/perf_eri_integrals.c")
     target_include_directories(perf_eri_integrals PRIVATE ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
-    target_link_libraries(     perf_eri_integrals PRIVATE m ${HDF5_LIBRARIES})
+    target_link_libraries(     perf_eri_integrals PRIVATE ${HDF5_LIBRARIES})
     if (OpenMP_C_FOUND)
         target_link_libraries( perf_eri_integrals PRIVATE OpenMP::OpenMP_C)
     endif()

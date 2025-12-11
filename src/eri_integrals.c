@@ -3,8 +3,8 @@
 #include <assert.h>
 #include "eri_integrals.h"
 #include "gausslet_factors.h"
+#include "symmetry.h"
 #include "aligned_memory.h"
-#include "util.h"
 
 
 //________________________________________________________________________________________________________________________
@@ -208,6 +208,142 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Evaluate the 3D grid point permutations effected by the octahedral point group elements.
+///
+static void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48])
+{
+	const glong num_points = cartesian_grid_3d_num_points(grid);
+
+	for (int i = 0; i < 48; ++i)
+	{
+		perm[i] = aligned_malloc(num_points * sizeof(perm[i][0]));
+		compute_cartesian_grid_3d_permutation(grid, &octahedral_matrep[i], perm[i]);
+	}
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Compute the minimal combined 4-index appearing within the octahedral group orbit
+/// and i <-> j, k <-> l, (i, j) <-> (k, l) permutation symmetry.
+///
+static inline glong minimum_octahedral_orbit_eri_tensor_index(
+	const glong num_points, const glong* octahedral_perm[48],
+	const glong i, const glong j, const glong k, const glong l)
+{
+	assert(0 <= i && i < num_points);
+	assert(0 <= j && j < num_points);
+	assert(0 <= k && k < num_points);
+	assert(0 <= l && l < num_points);
+
+	glong min_index = GLONG_MAX;
+
+	for (int n = 0; n < 48; ++n)
+	{
+		glong a = octahedral_perm[n][i];
+		glong b = octahedral_perm[n][j];
+		glong c = octahedral_perm[n][k];
+		glong d = octahedral_perm[n][l];
+
+		// permutation symmetries
+
+		if (a > b)
+		{
+			// swap
+			glong tmp = a;
+			a = b;
+			b = tmp;
+		}
+
+		if (c > d)
+		{
+			// swap
+			glong tmp = c;
+			c = d;
+			d = tmp;
+		}
+
+		glong ab = a * num_points + b;
+		glong cd = c * num_points + d;
+
+		if (ab > cd)
+		{
+			// swap
+			glong tmp = ab;
+			ab = cd;
+			cd = tmp;
+		}
+
+		min_index = lmin(min_index, ab * (num_points * num_points) + cd);
+	}
+
+	return min_index;
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Test whether the provided 'index' is smaller than or equal to
+/// the minimal combined 4-index appearing within the octahedral group orbit
+/// and i <-> j, k <-> l, (i, j) <-> (k, l) permutation symmetry.
+///
+static inline bool is_minimum_octahedral_orbit_eri_tensor_index(
+	const glong num_points, const glong* octahedral_perm[48],
+	const glong i, const glong j, const glong k, const glong l,
+	const glong index)
+{
+	assert(0 <= i && i < num_points);
+	assert(0 <= j && j < num_points);
+	assert(0 <= k && k < num_points);
+	assert(0 <= l && l < num_points);
+
+	for (int n = 0; n < 48; ++n)
+	{
+		glong a = octahedral_perm[n][i];
+		glong b = octahedral_perm[n][j];
+		glong c = octahedral_perm[n][k];
+		glong d = octahedral_perm[n][l];
+
+		// permutation symmetries
+
+		if (a > b)
+		{
+			// swap
+			glong tmp = a;
+			a = b;
+			b = tmp;
+		}
+
+		if (c > d)
+		{
+			// swap
+			glong tmp = c;
+			c = d;
+			d = tmp;
+		}
+
+		glong ab = a * num_points + b;
+		glong cd = c * num_points + d;
+
+		if (ab > cd)
+		{
+			// swap
+			glong tmp = ab;
+			ab = cd;
+			cd = tmp;
+		}
+
+		if (ab * (num_points * num_points) + cd < index) {
+			return false;  // fast return
+		}
+	}
+
+	return true;
+}
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals,
 /// exploiting translational invariance by only computing integrals with
 /// the center of the enclosing box of the orbital grid points at the origin.
@@ -238,10 +374,11 @@ void compute_sparse_eri_gausslet_integrals(
 		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
+	glong* octahedral_perm[48];
+	evaluate_octahedral_grid_permutations(grid, octahedral_perm);
+
 	const glong num_points = cartesian_grid_3d_num_points(grid);
 	eri->integral_values = aligned_calloc(num_points * num_points * num_points * num_points * sizeof(eri->integral_values[0]));
-
-	// TODO: exploit lattice symmetries described by the octahedral point group
 
 	#pragma omp parallel for schedule(dynamic) collapse(4)
 	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
@@ -252,13 +389,26 @@ void compute_sparse_eri_gausslet_integrals(
 			{
 				for (glong lcx = 0; lcx < grid->coord_range[0].num; ++lcx)
 				{
+					// deferring these checks to allow for OpenMP "collapse" of four nested loops
+					// order i <= j implies icx <= jcx
+					if (icx > jcx) {
+						continue;
+					}
+					// order k <= l implies kcx <= lcx
+					if (kcx > lcx) {
+						continue;
+					}
+					// order (i, j) <= (k, l) implies icx <= kcx
+					if (icx > kcx) {
+						continue;
+					}
+
 					// exploit translational invariance
 					{
 						// x-coordinate of orbital box center times 2
 						const glong center_x = 2 * grid->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
 						                                                         lmax(lmax(lmax(icx, jcx), kcx), lcx);
-						// not using integer division by 2 due to rounding towards zero
-						if (center_x < 0 || center_x >= 2) {
+						if (center_x < -1 || 1 < center_x) {
 							continue;
 						}
 					}
@@ -290,8 +440,7 @@ void compute_sparse_eri_gausslet_integrals(
 										// y-coordinate of orbital box center times 2
 										const glong center_y = 2 * grid->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
 										                                                         lmax(lmax(lmax(icy, jcy), kcy), lcy);
-										// not using integer division by 2 due to rounding towards zero
-										if (center_y < 0 || center_y >= 2) {
+										if (center_y < -1 || 1 < center_y) {
 											continue;
 										}
 									}
@@ -323,10 +472,21 @@ void compute_sparse_eri_gausslet_integrals(
 														// z-coordinate of orbital box center times 2
 														const glong center_z = 2 * grid->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
 														                                                         lmax(lmax(lmax(icz, jcz), kcz), lcz);
-														// not using integer division by 2 due to rounding towards zero
-														if (center_z < 0 || center_z >= 2) {
+														if (center_z < -1 || 1 < center_z) {
 															continue;
 														}
+													}
+
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx, lcy, lcz);
+
+													const glong idx_tensor = ((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l;
+
+													// use point group and permutation symmetries to avoid redundant calculations
+													if (!is_minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i, idx_j, idx_k, idx_l, idx_tensor)) {
+														continue;
 													}
 
 													const double center_diff_z = 0.5 * ((icz + jcz) - (kcz + lcz));
@@ -341,19 +501,6 @@ void compute_sparse_eri_gausslet_integrals(
 														products_z = gfp.products[ishift0123];
 														istart_z   = gfp.indices [ishift0123].istart;
 														num_z      = gfp.indices [ishift0123].num;
-													}
-
-													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
-													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
-													// use permutation symmetry to avoid redundant calculations
-													if (idx_i > idx_j) {
-														continue;
-													}
-													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx, kcy, kcz);
-													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx, lcy, lcz);
-													// use permutation symmetry to avoid redundant calculations
-													if (idx_k > idx_l) {
-														continue;
 													}
 
 													double val = 0;
@@ -388,7 +535,7 @@ void compute_sparse_eri_gausslet_integrals(
 													}
 													val *= prefac;
 
-													eri->integral_values[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l] = val;
+													eri->integral_values[idx_tensor] = val;
 												}
 											}
 										}
@@ -402,114 +549,10 @@ void compute_sparse_eri_gausslet_integrals(
 		}
 	}
 
+	for (int i = 0; i < 48; ++i) {
+		aligned_free(octahedral_perm[i]);
+	}
 	delete_gausslet_factor_products(&gfp);
-
-	// fill omitted entries according to permutation symmetries i <-> j and k <-> l
-	#pragma omp parallel for schedule(dynamic) collapse(4)
-	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
-	{
-		for (glong jcx = 0; jcx < grid->coord_range[0].num; ++jcx)
-		{
-			for (glong kcx = 0; kcx < grid->coord_range[0].num; ++kcx)
-			{
-				for (glong lcx = 0; lcx < grid->coord_range[0].num; ++lcx)
-				{
-					// exploit translational invariance
-					{
-						// x-coordinate of orbital box center times 2
-						const glong center_x = 2 * grid->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
-						                                                         lmax(lmax(lmax(icx, jcx), kcx), lcx);
-						// not using integer division by 2 due to rounding towards zero
-						if (center_x < 0 || center_x >= 2) {
-							continue;
-						}
-					}
-
-					for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
-					{
-						for (glong jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
-						{
-							for (glong kcy = 0; kcy < grid->coord_range[1].num; ++kcy)
-							{
-								for (glong lcy = 0; lcy < grid->coord_range[1].num; ++lcy)
-								{
-									// exploit translational invariance
-									{
-										// y-coordinate of orbital box center times 2
-										const glong center_y = 2 * grid->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
-										                                                         lmax(lmax(lmax(icy, jcy), kcy), lcy);
-										// not using integer division by 2 due to rounding towards zero
-										if (center_y < 0 || center_y >= 2) {
-											continue;
-										}
-									}
-
-									for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
-									{
-										for (glong jcz = 0; jcz < grid->coord_range[2].num; ++jcz)
-										{
-											for (glong kcz = 0; kcz < grid->coord_range[2].num; ++kcz)
-											{
-												for (glong lcz = 0; lcz < grid->coord_range[2].num; ++lcz)
-												{
-													// exploit translational invariance
-													{
-														// z-coordinate of orbital box center times 2
-														const glong center_z = 2 * grid->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
-														                                                         lmax(lmax(lmax(icz, jcz), kcz), lcz);
-														// not using integer division by 2 due to rounding towards zero
-														if (center_z < 0 || center_z >= 2) {
-															continue;
-														}
-													}
-
-													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
-													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
-													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx, kcy, kcz);
-													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx, lcy, lcz);
-
-													if (idx_i <= idx_j && idx_k <= idx_l) {
-														// entry has already been set
-														continue;
-													}
-
-													glong idx_i_p, idx_j_p;
-													if (idx_i <= idx_j)
-													{
-														idx_i_p = idx_i;
-														idx_j_p = idx_j;
-													}
-													else
-													{
-														idx_i_p = idx_j;
-														idx_j_p = idx_i;
-													}
-													glong idx_k_p, idx_l_p;
-													if (idx_k <= idx_l)
-													{
-														idx_k_p = idx_k;
-														idx_l_p = idx_l;
-													}
-													else
-													{
-														idx_k_p = idx_l;
-														idx_l_p = idx_k;
-													}
-
-													eri->integral_values[((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l] =
-														eri->integral_values[((idx_i_p * num_points + idx_j_p) * num_points + idx_k_p) * num_points + idx_l_p];
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 }
 
 
@@ -525,6 +568,9 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 	assert(num_points_sparse > 0);
 	assert(num_points_dense  > 0);
 
+	glong* octahedral_perm[48];
+	evaluate_octahedral_grid_permutations(&eri_sparse->grid, octahedral_perm);
+
 	#pragma omp parallel for collapse(4)
 	for (glong icx = 0; icx < eri_dense->grid.coord_range[0].num; ++icx)
 	{
@@ -537,8 +583,8 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 					// x-coordinate of orbital box center times 2
 					const glong center_x = 2 * eri_dense->grid.coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
 					                                                                   lmax(lmax(lmax(icx, jcx), kcx), lcx);
-					const glong trans_x = lfloor_div(center_x, 2);
-					assert(0 <= center_x - 2 * trans_x && center_x - 2 * trans_x < 2);
+					const glong trans_x = center_x / 2;
+					assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
 
 					for (glong icy = 0; icy < eri_dense->grid.coord_range[1].num; ++icy)
 					{
@@ -551,8 +597,8 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 									// y-coordinate of orbital box center times 2
 									const glong center_y = 2 * eri_dense->grid.coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
 									                                                                   lmax(lmax(lmax(icy, jcy), kcy), lcy);
-									const glong trans_y = lfloor_div(center_y, 2);
-									assert(0 <= center_y - 2 * trans_y && center_y - 2 * trans_y < 2);
+									const glong trans_y = center_y / 2;
+									assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
 
 									for (glong icz = 0; icz < eri_dense->grid.coord_range[2].num; ++icz)
 									{
@@ -565,13 +611,14 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 													// z-coordinate of orbital box center times 2
 													const glong center_z = 2 * eri_dense->grid.coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
 													                                                                   lmax(lmax(lmax(icz, jcz), kcz), lcz);
-													const glong trans_z = lfloor_div(center_z, 2);
-													assert(0 <= center_z - 2 * trans_z && center_z - 2 * trans_z < 2);
+													const glong trans_z = center_z / 2;
+													assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
 
 													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, icx, icy, icz);
 													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, jcx, jcy, jcz);
 													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, kcx, kcy, kcz);
 													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, lcx, lcy, lcz);
+													const glong idx_tensor_dense  = ((idx_i * num_points_dense + idx_j) * num_points_dense + idx_k) * num_points_dense + idx_l;
 
 													const union cartesian_grid_point_3d pt_i_p = {
 														.x = eri_dense->grid.coord_range[0].istart + icx - trans_x,
@@ -597,9 +644,9 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 													const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_j_p);
 													const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_k_p);
 													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_l_p);
+													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
 
-													eri_dense->integral_values[((idx_i * num_points_dense + idx_j) * num_points_dense + idx_k) * num_points_dense + idx_l] =
-														eri_sparse->integral_values[((idx_i_p * num_points_sparse + idx_j_p) * num_points_sparse + idx_k_p) * num_points_sparse + idx_l_p];
+													eri_dense->integral_values[idx_tensor_dense] = eri_sparse->integral_values[idx_tensor_sparse];
 												}
 											}
 										}
@@ -611,6 +658,10 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 				}
 			}
 		}
+	}
+
+	for (int i = 0; i < 48; ++i) {
+		aligned_free(octahedral_perm[i]);
 	}
 }
 

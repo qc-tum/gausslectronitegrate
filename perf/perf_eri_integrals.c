@@ -40,10 +40,11 @@ int main()
 		H5Fclose(file);
 	}
 
+	// require a rotationally symmetric grid
 	const struct cartesian_grid_3d grid = {
 		.coord_range = {
-			{ .istart = -1, .num = 3 },
-			{ .istart = -1, .num = 3 },
+			{ .istart = -2, .num = 5 },
+			{ .istart = -2, .num = 5 },
 			{ .istart = -2, .num = 5 },
 		}
 	};

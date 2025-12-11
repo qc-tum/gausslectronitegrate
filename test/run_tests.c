@@ -19,7 +19,6 @@ char* test_grid_permutation();
 char* test_kinetic_integrals();
 char* test_nuclear_integrals();
 char* test_eri_integrals();
-char* test_lfloor_div();
 
 
 #define TEST_FUNCTION_ENTRY(fname) { .func = fname, .name = #fname }
@@ -39,7 +38,6 @@ int main()
 		TEST_FUNCTION_ENTRY(test_kinetic_integrals),
 		TEST_FUNCTION_ENTRY(test_nuclear_integrals),
 		TEST_FUNCTION_ENTRY(test_eri_integrals),
-		TEST_FUNCTION_ENTRY(test_lfloor_div),
 	};
 	int num_tests = sizeof(tests) / sizeof(tests[0]);
 
