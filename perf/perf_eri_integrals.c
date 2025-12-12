@@ -64,19 +64,22 @@ int main()
 
 	printf("Evaluating the electron repulsion integrals (ERIs) for Gausslet orbitals and %li grid points... ", num_points);
 	const uint64_t tick_start = get_time_ticks();
-	struct eri_gausslet_integrals eri;
+	struct sparse_eri_gausslet_integrals eri;
 	compute_sparse_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
 	const uint64_t tick_end = get_time_ticks();
 	printf("Done.\n");
 
+	printf("number of entries (after octahedral and permutational symmetry reductions): %li\n", eri.num_entries);
+
 	// index of origin
 	union cartesian_grid_point_3d pt_origin = { 0 };
 	const glong iorigin = cartesian_grid_point_3d_to_linear_index(&grid, &pt_origin);
-	printf("ERI for all Gausslets at origin: %.17g\n", eri.integral_values[((iorigin * num_points + iorigin) * num_points + iorigin) * num_points + iorigin]);
+	const glong idx_tensor = ((iorigin * num_points + iorigin) * num_points + iorigin) * num_points + iorigin;
+	printf("ERI for all Gausslets at origin: %.17g\n", sparse_eri_gausslet_integrals_get_value(&eri, idx_tensor));
 
 	printf("wall clock time: %g seconds\n", (tick_end - tick_start) / ticks_per_sec);
 
-	delete_eri_gausslet_integrals(&eri);
+	delete_sparse_eri_gausslet_integrals(&eri);
 	aligned_free(gdata.coefficients);
 
 	return 0;

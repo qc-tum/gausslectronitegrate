@@ -641,7 +641,7 @@ static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), Py
 	};
 
 	// compute electron repulsion integrals (ERIs), exploiting translational invariance
-	struct eri_gausslet_integrals eri_sparse;
+	struct sparse_eri_gausslet_integrals eri_sparse;
 	compute_sparse_eri_gausslet_integrals(&gdata, &grid_sparse, tol, &eri_sparse);
 	aligned_free(gdata.coefficients);
 
@@ -663,7 +663,7 @@ static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), Py
 	};
 	fill_dense_eri_tensor(&eri_sparse, &eri_dense);
 
-	delete_eri_gausslet_integrals(&eri_sparse);
+	delete_sparse_eri_gausslet_integrals(&eri_sparse);
 
 	return (PyObject*)py_eri_tensor;
 }

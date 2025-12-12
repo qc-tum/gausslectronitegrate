@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <assert.h>
@@ -344,13 +345,118 @@ static inline bool is_minimum_octahedral_orbit_eri_tensor_index(
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Index-value pair structure.
+///
+struct index_value_pair
+{
+	glong index;   //!< index
+	double value;  //!< numerical value
+};
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Comparison function for sorting.
+///
+static int compare_index_value_pairs(const void* a, const void* b)
+{
+	const struct index_value_pair* x = a;
+	const struct index_value_pair* y = b;
+
+	if (x->index < y->index) {
+		return -1;
+	}
+	if (x->index > y->index) {
+		return 1;
+	}
+	// x->index == y->index
+
+	return 0;
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Linked list node for storing index-value pairs.
+///
+struct iv_list_node
+{
+	struct index_value_pair data;  //!< index-value data entry
+	struct iv_list_node* next;     //!< pointer to next node
+};
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Linked list for storing index-value pairs.
+///
+struct iv_list
+{
+	struct iv_list_node* head;  //!< pointer to head node, NULL for an empty list
+	glong size;                 //!< number of entries in the list
+};
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Add a new node to the linked list.
+///
+static inline void iv_list_add_entry(struct iv_list* list, const glong index, const double value)
+{
+	struct iv_list_node* new_node = aligned_malloc(sizeof(new_node[0]));
+	new_node->data.index = index;
+	new_node->data.value = value;
+	new_node->next = list->head;
+
+	list->head = new_node;
+	list->size++;
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Copy the entries of the list into a linear array.
+///
+static void iv_list_to_array(const struct iv_list* list, struct index_value_pair* entries)
+{
+	const struct iv_list_node* node = list->head;
+	glong i = 0;
+	while (node != NULL)
+	{
+		entries[i] = node->data;
+		node = node->next;
+		i++;
+	}
+	assert(i == list->size);
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Delete the linked list (free memory).
+///
+static void delete_iv_list(struct iv_list* list)
+{
+	while (list->head != NULL)
+	{
+		struct iv_list_node* next = list->head->next;
+		aligned_free(list->head);
+		list->size--;
+		list->head = next;
+	}
+	assert(list->size == 0);
+}
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals,
 /// exploiting translational invariance by only computing integrals with
 /// the center of the enclosing box of the orbital grid points at the origin.
 ///
 void compute_sparse_eri_gausslet_integrals(
 	const struct gausslet_data* gdata, const struct cartesian_grid_3d* grid,
-	const double tol, struct eri_gausslet_integrals* eri)
+	const double tol, struct sparse_eri_gausslet_integrals* eri)
 {
 	// copy grid information
 	eri->grid = *grid;
@@ -378,7 +484,8 @@ void compute_sparse_eri_gausslet_integrals(
 	evaluate_octahedral_grid_permutations(grid, octahedral_perm);
 
 	const glong num_points = cartesian_grid_3d_num_points(grid);
-	eri->integral_values = aligned_calloc(num_points * num_points * num_points * num_points * sizeof(eri->integral_values[0]));
+
+	struct iv_list eri_list = { 0 };
 
 	#pragma omp parallel for schedule(dynamic) collapse(4)
 	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
@@ -535,7 +642,10 @@ void compute_sparse_eri_gausslet_integrals(
 													}
 													val *= prefac;
 
-													eri->integral_values[idx_tensor] = val;
+													#pragma omp critical
+													{
+														iv_list_add_entry(&eri_list, idx_tensor, val);
+													}
 												}
 											}
 										}
@@ -553,6 +663,68 @@ void compute_sparse_eri_gausslet_integrals(
 		aligned_free(octahedral_perm[i]);
 	}
 	delete_gausslet_factor_products(&gfp);
+
+	// transfer list entries to an array
+	const glong num_entries = eri_list.size;
+	struct index_value_pair* entries = aligned_malloc(num_entries * sizeof(entries[0]));
+	iv_list_to_array(&eri_list, entries);
+	delete_iv_list(&eri_list);
+
+	// sort entries
+	qsort(entries, num_entries, sizeof(entries[0]), compare_index_value_pairs);
+
+	// copy entries into output structure
+	eri->num_entries = num_entries;
+	eri->integral_values = aligned_malloc(num_entries * sizeof(eri->integral_values[0]));
+	eri->four_indices    = aligned_malloc(num_entries * sizeof(eri->four_indices[0]));
+	for (glong i = 0; i < num_entries; ++i)
+	{
+		eri->integral_values[i] = entries[i].value;
+		eri->four_indices[i]    = entries[i].index;
+	}
+
+	aligned_free(entries);
+
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Retrieve the value corresponding to 'index', or 0 if 'index' cannot be found.
+///
+double sparse_eri_gausslet_integrals_get_value(const struct sparse_eri_gausslet_integrals* eri, const glong index)
+{
+	// search interval: [lower, upper)
+	glong lower = 0;
+	glong upper = eri->num_entries;
+	while (true)
+	{
+		if (lower >= upper) {
+			return 0;  // 'index' not found
+		}
+		const glong i = (lower + upper) / 2;
+		if (index < eri->four_indices[i]) {
+			upper = i;
+		}
+		else if (index > eri->four_indices[i]) {
+			lower = i + 1;
+		}
+		else {
+			// found it
+			return eri->integral_values[i];
+		}
+	}
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Delete the sparse electron repulsion integral storage structure (free memory).
+///
+void delete_sparse_eri_gausslet_integrals(struct sparse_eri_gausslet_integrals* eri)
+{
+	aligned_free(eri->four_indices);
+	aligned_free(eri->integral_values);
 }
 
 
@@ -561,7 +733,7 @@ void compute_sparse_eri_gausslet_integrals(
 /// \brief Fill all entries of the dense electron repulsion integral (ERI) tensor of degree four,
 /// assuming that 'eri_dense' has been allocated already.
 ///
-void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_sparse, struct eri_gausslet_integrals* restrict eri_dense)
+void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* restrict eri_sparse, struct eri_gausslet_integrals* restrict eri_dense)
 {
 	const glong num_points_sparse = cartesian_grid_3d_num_points(&eri_sparse->grid);
 	const glong num_points_dense  = cartesian_grid_3d_num_points(&eri_dense->grid);
@@ -646,7 +818,7 @@ void fill_dense_eri_tensor(const struct eri_gausslet_integrals* restrict eri_spa
 													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_l_p);
 													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
 
-													eri_dense->integral_values[idx_tensor_dense] = eri_sparse->integral_values[idx_tensor_sparse];
+													eri_dense->integral_values[idx_tensor_dense] = sparse_eri_gausslet_integrals_get_value(eri_sparse, idx_tensor_sparse);
 												}
 											}
 										}

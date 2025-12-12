@@ -43,7 +43,7 @@ char* test_eri_integrals()
 		return "reading tolerance from disk failed";
 	}
 
-	struct eri_gausslet_integrals eri_sparse;
+	struct sparse_eri_gausslet_integrals eri_sparse;
 	compute_sparse_eri_gausslet_integrals(&gdata, &grid_sparse, tol, &eri_sparse);
 
 	const struct cartesian_grid_3d grid_dense = {
@@ -75,7 +75,7 @@ char* test_eri_integrals()
 
 	aligned_free(eri_ref);
 	delete_eri_gausslet_integrals(&eri_dense);
-	delete_eri_gausslet_integrals(&eri_sparse);
+	delete_sparse_eri_gausslet_integrals(&eri_sparse);
 	aligned_free(gdata.coefficients);
 
 	H5Fclose(file);
