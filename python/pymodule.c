@@ -124,6 +124,38 @@ static int parse_cartesian_grid(PyObject* py_grid, const char* syntax, struct ca
 }
 
 
+static int parse_cartesian_grid_point(PyObject* py_point, const char* syntax, union cartesian_grid_point_3d* grid_point)
+{
+	if (!PySequence_Check(py_point)) {
+		char msg[1024];
+		sprintf(msg, "cannot interpret grid point as a sequence; syntax: %s", syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		return -1;
+	}
+	if (PySequence_Length(py_point) != 3) {
+		char msg[1024];
+		sprintf(msg, "grid point must be a sequence of length three (corresponding to the Cartesian coordinates); syntax: %s", syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		return -1;
+	}
+
+	for (int i = 0; i < 3; ++i)
+	{
+		PyObject* py_ci = PySequence_GetItem(py_point, i);
+		grid_point->c[i] = PyLong_AsLong(py_ci);
+		if (PyErr_Occurred()) {
+			char msg[1024];
+			sprintf(msg, "cannot interpret the %i-th entry in grid point as an integer; syntax: %s", i, syntax);
+			PyErr_SetString(PyExc_ValueError, msg);
+			return -1;
+		}
+		Py_DECREF(py_ci);
+	}
+
+	return 0;
+}
+
+
 static int parse_cartesian_grid_points(PyObject* py_grid_points, const char* syntax, const int num, union cartesian_grid_point_3d* grid_points)
 {
 	if (!PySequence_Check(py_grid_points)) {
@@ -288,13 +320,13 @@ static PyObject* Py_grid_num_points(PyObject* Py_UNUSED(self), PyObject* args)
 
 static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObject* args)
 {
-	const char* syntax = "grid_point_to_linear_index(grid, px, py, pz)";
+	const char* syntax = "grid_point_to_linear_index(grid, point)";
 
 	PyObject* py_grid;
-	union cartesian_grid_point_3d pt;
+	PyObject* py_point;
 
 	// parse input arguments
-	if (!PyArg_ParseTuple(args, "Olll", &py_grid, &pt.x, &pt.y, &pt.z)) {
+	if (!PyArg_ParseTuple(args, "OO", &py_grid, &py_point)) {
 		char msg[1024];
 		sprintf(msg, "error parsing input; syntax: %s", syntax);
 		PyErr_SetString(PyExc_SyntaxError, msg);
@@ -307,27 +339,33 @@ static PyObject* Py_grid_point_to_linear_index(PyObject* Py_UNUSED(self), PyObje
 		return NULL;
 	}
 
+	// grid point
+	union cartesian_grid_point_3d point;
+	if (parse_cartesian_grid_point(py_point, syntax, &point) < 0) {
+		return NULL;
+	}
+
 	// range checks
-	if (pt.x < grid.coord_range[0].istart || grid.coord_range[0].istart + grid.coord_range[0].num - 1 < pt.x) {
+	if (point.x < grid.coord_range[0].istart || grid.coord_range[0].istart + grid.coord_range[0].num - 1 < point.x) {
 		char msg[1024];
-		sprintf(msg, "'px' out of grid coordinate range; syntax: %s", syntax);
+		sprintf(msg, "'point.x' out of grid coordinate range; syntax: %s", syntax);
 		PyErr_SetString(PyExc_ValueError, msg);
 		return NULL;
 	}
-	if (pt.y < grid.coord_range[1].istart || grid.coord_range[1].istart + grid.coord_range[1].num - 1 < pt.y) {
+	if (point.y < grid.coord_range[1].istart || grid.coord_range[1].istart + grid.coord_range[1].num - 1 < point.y) {
 		char msg[1024];
-		sprintf(msg, "'py' out of grid coordinate range; syntax: %s", syntax);
+		sprintf(msg, "'point.y' out of grid coordinate range; syntax: %s", syntax);
 		PyErr_SetString(PyExc_ValueError, msg);
 		return NULL;
 	}
-	if (pt.z < grid.coord_range[2].istart || grid.coord_range[2].istart + grid.coord_range[2].num - 1 < pt.z) {
+	if (point.z < grid.coord_range[2].istart || grid.coord_range[2].istart + grid.coord_range[2].num - 1 < point.z) {
 		char msg[1024];
-		sprintf(msg, "'pz' out of grid coordinate range; syntax: %s", syntax);
+		sprintf(msg, "'point.z' out of grid coordinate range; syntax: %s", syntax);
 		PyErr_SetString(PyExc_ValueError, msg);
 		return NULL;
 	}
 
-	return PyLong_FromLong(cartesian_grid_point_3d_to_linear_index(&grid, &pt));
+	return PyLong_FromLong(cartesian_grid_point_3d_to_linear_index(&grid, &point));
 }
 
 
