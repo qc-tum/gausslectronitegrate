@@ -9,6 +9,24 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Array of linearized electron repulsion integral four-indices (ij|kl), and corresponding meta-information.
+///
+struct sparse_eri_indices
+{
+	glong* four_indices;            //!< linearized four-indices (ij|kl); array must be sorted
+	glong num;                      //!< number of entries
+	struct cartesian_grid_3d grid;  //!< underlying grid
+};
+
+
+void enumerate_symmetry_reduced_eri_indices(const struct cartesian_grid_3d* grid, struct sparse_eri_indices* ret);
+
+
+void delete_sparse_eri_indices(struct sparse_eri_indices* indices);
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Selected electron repulsion integral (ERI) values for Gausslet orbitals, and corresponding meta-information.
 ///
 struct sparse_eri_gausslet_integrals
@@ -20,29 +38,14 @@ struct sparse_eri_gausslet_integrals
 };
 
 
-void compute_sparse_eri_gausslet_integrals(
-	const struct gausslet_data* gdata, const struct cartesian_grid_3d* grid,
+void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
+	const struct cartesian_grid_3d* grid, const glong* four_indices, const glong num_indices,
 	const double tol, struct sparse_eri_gausslet_integrals* eri);
 
 
 double sparse_eri_gausslet_integrals_get_value(const struct sparse_eri_gausslet_integrals* eri, const glong index);
 
+void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_sparse, const struct cartesian_grid_3d* grid_dense, double* eri_tensor);
+
 
 void delete_sparse_eri_gausslet_integrals(struct sparse_eri_gausslet_integrals* eri);
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Storing electron repulsion integrals (ERIs) for Gausslet orbitals, and corresponding meta-information.
-///
-struct eri_gausslet_integrals
-{
-	double* integral_values;        //!< overlap integral values, degree-four tensor of size "number of grid points"^4
-	struct cartesian_grid_3d grid;  //!< underlying grid
-};
-
-
-void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* restrict eri_sparse, struct eri_gausslet_integrals* restrict eri_dense);
-
-
-void delete_eri_gausslet_integrals(struct eri_gausslet_integrals* eri);

@@ -345,55 +345,43 @@ static inline bool is_minimum_octahedral_orbit_eri_tensor_index(
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Index-value pair structure.
-///
-struct index_value_pair
-{
-	glong index;   //!< index
-	double value;  //!< numerical value
-};
-
-
-//________________________________________________________________________________________________________________________
-///
 /// \brief Comparison function for sorting.
 ///
-static int compare_index_value_pairs(const void* a, const void* b)
+static int compare_indices(const void* a, const void* b)
 {
-	const struct index_value_pair* x = a;
-	const struct index_value_pair* y = b;
+	const glong x = *((glong*)a);
+	const glong y = *((glong*)b);
 
-	if (x->index < y->index) {
+	if (x < y) {
 		return -1;
 	}
-	if (x->index > y->index) {
+	if (x > y) {
 		return 1;
 	}
-	// x->index == y->index
-
+	// x == y
 	return 0;
 }
 
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Linked list node for storing index-value pairs.
+/// \brief Linked list node for storing indices.
 ///
-struct iv_list_node
+struct index_list_node
 {
-	struct index_value_pair data;  //!< index-value data entry
-	struct iv_list_node* next;     //!< pointer to next node
+	glong data;                    //!< index data entry
+	struct index_list_node* next;  //!< pointer to next node
 };
 
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Linked list for storing index-value pairs.
+/// \brief Linked list for storing indices.
 ///
-struct iv_list
+struct index_list
 {
-	struct iv_list_node* head;  //!< pointer to head node, NULL for an empty list
-	glong size;                 //!< number of entries in the list
+	struct index_list_node* head;  //!< pointer to head node, NULL for an empty list
+	glong size;                    //!< number of entries in the list
 };
 
 
@@ -401,11 +389,10 @@ struct iv_list
 ///
 /// \brief Add a new node to the linked list.
 ///
-static inline void iv_list_add_entry(struct iv_list* list, const glong index, const double value)
+static inline void index_list_add_entry(struct index_list* list, const glong index)
 {
-	struct iv_list_node* new_node = aligned_malloc(sizeof(new_node[0]));
-	new_node->data.index = index;
-	new_node->data.value = value;
+	struct index_list_node* new_node = aligned_malloc(sizeof(new_node[0]));
+	new_node->data = index;
 	new_node->next = list->head;
 
 	list->head = new_node;
@@ -417,9 +404,9 @@ static inline void iv_list_add_entry(struct iv_list* list, const glong index, co
 ///
 /// \brief Copy the entries of the list into a linear array.
 ///
-static void iv_list_to_array(const struct iv_list* list, struct index_value_pair* entries)
+static void index_list_to_array(const struct index_list* list, glong* entries)
 {
-	const struct iv_list_node* node = list->head;
+	const struct index_list_node* node = list->head;
 	glong i = 0;
 	while (node != NULL)
 	{
@@ -435,11 +422,11 @@ static void iv_list_to_array(const struct iv_list* list, struct index_value_pair
 ///
 /// \brief Delete the linked list (free memory).
 ///
-static void delete_iv_list(struct iv_list* list)
+static void delete_index_list(struct index_list* list)
 {
 	while (list->head != NULL)
 	{
-		struct iv_list_node* next = list->head->next;
+		struct index_list_node* next = list->head->next;
 		aligned_free(list->head);
 		list->size--;
 		list->head = next;
@@ -450,42 +437,22 @@ static void delete_iv_list(struct iv_list* list)
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals,
-/// exploiting translational invariance by only computing integrals with
-/// the center of the enclosing box of the orbital grid points at the origin.
+/// \brief Enumerate the linearized electron repulsion integral (ERI) indices (ij|kl) after symmetry reduction,
+/// using translational invariance by only retaining integrals
+/// with the center of the enclosing box of the orbital grid points at the origin,
+/// and exploiting octahedral point group symmetry and i <-> j, k <-> l, (i, j) <-> (k, l) permutation symmetry.
 ///
-void compute_sparse_eri_gausslet_integrals(
-	const struct gausslet_data* gdata, const struct cartesian_grid_3d* grid,
-	const double tol, struct sparse_eri_gausslet_integrals* eri)
+void enumerate_symmetry_reduced_eri_indices(const struct cartesian_grid_3d* grid, struct sparse_eri_indices* ret)
 {
 	// copy grid information
-	eri->grid = *grid;
-
-	const double prefac = cubic_power(M_PI / 9.);
-
-	struct gausslet_factor_products gfp;
-	{
-		const glong max_range = lmax(lmax(
-			grid->coord_range[0].num,
-			grid->coord_range[1].num),
-			grid->coord_range[2].num);
-		assert(max_range > 0);
-
-		// unique shifts
-		const struct range shifts = {
-			.istart = -max_range + 1,
-			.num    = 2 * max_range - 1,
-		};
-
-		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
-	}
+	ret->grid = *grid;
 
 	glong* octahedral_perm[48];
 	evaluate_octahedral_grid_permutations(grid, octahedral_perm);
 
 	const glong num_points = cartesian_grid_3d_num_points(grid);
 
-	struct iv_list eri_list = { 0 };
+	struct index_list index_list = { 0 };
 
 	#pragma omp parallel for schedule(dynamic) collapse(4)
 	for (glong icx = 0; icx < grid->coord_range[0].num; ++icx)
@@ -520,20 +487,6 @@ void compute_sparse_eri_gausslet_integrals(
 						}
 					}
 
-					const double center_diff_x = 0.5 * ((icx + jcx) - (kcx + lcx));
-					const double* products_x;
-					glong istart_x, num_x;
-					{
-						const glong ishift01 = (icx - jcx) - gfp.shifts.istart;
-						const glong ishift23 = (kcx - lcx) - gfp.shifts.istart;
-						assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
-						assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
-						const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
-						products_x = gfp.products[ishift0123];
-						istart_x   = gfp.indices [ishift0123].istart;
-						num_x      = gfp.indices [ishift0123].num;
-					}
-
 					for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
 					{
 						for (glong jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
@@ -550,20 +503,6 @@ void compute_sparse_eri_gausslet_integrals(
 										if (center_y < -1 || 1 < center_y) {
 											continue;
 										}
-									}
-
-									const double center_diff_y = 0.5 * ((icy + jcy) - (kcy + lcy));
-									const double* products_y;
-									glong istart_y, num_y;
-									{
-										const glong ishift01 = (icy - jcy) - gfp.shifts.istart;
-										const glong ishift23 = (kcy - lcy) - gfp.shifts.istart;
-										assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
-										assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
-										const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
-										products_y = gfp.products[ishift0123];
-										istart_y   = gfp.indices [ishift0123].istart;
-										num_y      = gfp.indices [ishift0123].num;
 									}
 
 									for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
@@ -592,59 +531,12 @@ void compute_sparse_eri_gausslet_integrals(
 													const glong idx_tensor = ((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l;
 
 													// use point group and permutation symmetries to avoid redundant calculations
-													if (!is_minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i, idx_j, idx_k, idx_l, idx_tensor)) {
-														continue;
-													}
-
-													const double center_diff_z = 0.5 * ((icz + jcz) - (kcz + lcz));
-													const double* products_z;
-													glong istart_z, num_z;
+													if (is_minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i, idx_j, idx_k, idx_l, idx_tensor))
 													{
-														const glong ishift01 = (icz - jcz) - gfp.shifts.istart;
-														const glong ishift23 = (kcz - lcz) - gfp.shifts.istart;
-														assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
-														assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
-														const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
-														products_z = gfp.products[ishift0123];
-														istart_z   = gfp.indices [ishift0123].istart;
-														num_z      = gfp.indices [ishift0123].num;
-													}
-
-													double val = 0;
-													double pt[3];
-													for (glong sx = 0; sx < num_x; ++sx)
-													{
-														if (fabs(products_x[sx]) <= tol) {
-															continue;
-														}
-
-														pt[0] = center_diff_x + (istart_x + sx) / 6.0;
-
-														for (glong sy = 0; sy < num_y; ++sy)
+														#pragma omp critical
 														{
-															if (fabs(products_y[sy]) <= tol) {
-																continue;
-															}
-
-															pt[1] = center_diff_y + (istart_y + sy) / 6.0;
-
-															for (glong sz = 0; sz < num_z; ++sz)
-															{
-																if (fabs(products_z[sz]) <= tol) {
-																	continue;
-																}
-
-																pt[2] = center_diff_z + (istart_z + sz) / 6.0;
-
-																val += products_x[sx] * products_y[sy] * products_z[sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
-															}
+															index_list_add_entry(&index_list, idx_tensor);
 														}
-													}
-													val *= prefac;
-
-													#pragma omp critical
-													{
-														iv_list_add_entry(&eri_list, idx_tensor, val);
 													}
 												}
 											}
@@ -662,29 +554,143 @@ void compute_sparse_eri_gausslet_integrals(
 	for (int i = 0; i < 48; ++i) {
 		aligned_free(octahedral_perm[i]);
 	}
-	delete_gausslet_factor_products(&gfp);
 
-	// transfer list entries to an array
-	const glong num_entries = eri_list.size;
-	struct index_value_pair* entries = aligned_malloc(num_entries * sizeof(entries[0]));
-	iv_list_to_array(&eri_list, entries);
-	delete_iv_list(&eri_list);
+	// transfer list entries to output structure
+	ret->num = index_list.size;
+	ret->four_indices = aligned_malloc(ret->num * sizeof(ret->four_indices[0]));
+	index_list_to_array(&index_list, ret->four_indices);
+	delete_index_list(&index_list);
 
 	// sort entries
-	qsort(entries, num_entries, sizeof(entries[0]), compare_index_value_pairs);
+	qsort(ret->four_indices, ret->num, sizeof(ret->four_indices[0]), compare_indices);
+}
 
-	// copy entries into output structure
-	eri->num_entries = num_entries;
-	eri->integral_values = aligned_malloc(num_entries * sizeof(eri->integral_values[0]));
-	eri->four_indices    = aligned_malloc(num_entries * sizeof(eri->four_indices[0]));
-	for (glong i = 0; i < num_entries; ++i)
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Delete electron repulsion integral indices structure (free memory).
+///
+void delete_sparse_eri_indices(struct sparse_eri_indices* indices)
+{
+	aligned_free(indices->four_indices);
+	indices->num = 0;
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Evaluate the electron repulsion integrals (ERIs) for Gausslet orbitals and the provided linearized indices (ij|kl).
+///
+void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
+	const struct cartesian_grid_3d* grid, const glong* four_indices, const glong num_indices,
+	const double tol, struct sparse_eri_gausslet_integrals* eri)
+{
+	// copy grid information
+	eri->grid = *grid;
+
+	const double prefac = cubic_power(M_PI / 9.);
+
+	struct gausslet_factor_products gfp;
 	{
-		eri->integral_values[i] = entries[i].value;
-		eri->four_indices[i]    = entries[i].index;
+		const glong max_range = lmax(lmax(
+			grid->coord_range[0].num,
+			grid->coord_range[1].num),
+			grid->coord_range[2].num);
+		assert(max_range > 0);
+
+		// unique shifts
+		const struct range shifts = {
+			.istart = -max_range + 1,
+			.num    = 2 * max_range - 1,
+		};
+
+		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
-	aligned_free(entries);
+	// copy indices
+	eri->num_entries = num_indices;
+	eri->four_indices = aligned_malloc(num_indices * sizeof(eri->four_indices[0]));
+	memcpy(eri->four_indices, four_indices, num_indices * sizeof(eri->four_indices[0]));
 
+	eri->integral_values = aligned_malloc(eri->num_entries * sizeof(eri->integral_values[0]));
+
+	const glong num_points = cartesian_grid_3d_num_points(grid);
+
+	#pragma omp parallel for
+	for (glong n = 0; n < num_indices; ++n)
+	{
+		// decode (ij|kl) indices
+		glong idx_i, idx_j, idx_k, idx_l;
+		{
+			glong rem = four_indices[n];
+			idx_l = rem % num_points;
+			rem  /= num_points;
+			idx_k = rem % num_points;
+			rem  /= num_points;
+			idx_j = rem % num_points;
+			rem  /= num_points;
+			idx_i = rem;
+		}
+
+		// decode grid points
+		union cartesian_grid_point_3d pt_i, pt_j, pt_k, pt_l;
+		linear_index_to_cartesian_grid_point_3d(grid, idx_i, &pt_i);
+		linear_index_to_cartesian_grid_point_3d(grid, idx_j, &pt_j);
+		linear_index_to_cartesian_grid_point_3d(grid, idx_k, &pt_k);
+		linear_index_to_cartesian_grid_point_3d(grid, idx_l, &pt_l);
+
+		double center_diff[3];
+		const double* products[3];
+		union cartesian_grid_point_3d istart, num;
+		for (int i = 0; i < 3; ++i)
+		{
+			center_diff[i] = 0.5 * ((pt_i.c[i] + pt_j.c[i]) - (pt_k.c[i] + pt_l.c[i]));
+			const glong ishift01  = (pt_i.c[i] - pt_j.c[i]) - gfp.shifts.istart;
+			const glong ishift23  = (pt_k.c[i] - pt_l.c[i]) - gfp.shifts.istart;
+			assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
+			assert(0 <= ishift23 && ishift23 < gfp.shifts.num);
+			const glong ishift0123 = ishift01 * gfp.shifts.num + ishift23;
+			products[i] = gfp.products[ishift0123];
+			istart.c[i] = gfp.indices [ishift0123].istart;
+			num.c[i]    = gfp.indices [ishift0123].num;
+		}
+
+		double val = 0;
+		double pt[3];
+		for (glong sx = 0; sx < num.x; ++sx)
+		{
+			if (fabs(products[0][sx]) <= tol) {
+				continue;
+			}
+
+			pt[0] = center_diff[0] + (istart.x + sx) / 6.0;
+
+			for (glong sy = 0; sy < num.y; ++sy)
+			{
+				if (fabs(products[1][sy]) <= tol) {
+					continue;
+				}
+
+				pt[1] = center_diff[1] + (istart.y + sy) / 6.0;
+
+				for (glong sz = 0; sz < num.z; ++sz)
+				{
+					if (fabs(products[2][sz]) <= tol) {
+						continue;
+					}
+
+					pt[2] = center_diff[2] + (istart.z + sz) / 6.0;
+
+					val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
+				}
+			}
+		}
+		val *= prefac;
+
+		eri->integral_values[n] = val;
+	}
+
+	delete_gausslet_factor_products(&gfp);
 }
 
 
@@ -719,24 +725,12 @@ double sparse_eri_gausslet_integrals_get_value(const struct sparse_eri_gausslet_
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Delete the sparse electron repulsion integral storage structure (free memory).
+/// \brief Fill all entries of the dense electron repulsion integral (ERI) tensor of degree four.
 ///
-void delete_sparse_eri_gausslet_integrals(struct sparse_eri_gausslet_integrals* eri)
-{
-	aligned_free(eri->four_indices);
-	aligned_free(eri->integral_values);
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Fill all entries of the dense electron repulsion integral (ERI) tensor of degree four,
-/// assuming that 'eri_dense' has been allocated already.
-///
-void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* restrict eri_sparse, struct eri_gausslet_integrals* restrict eri_dense)
+void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_sparse, const struct cartesian_grid_3d* grid_dense, double* eri_tensor)
 {
 	const glong num_points_sparse = cartesian_grid_3d_num_points(&eri_sparse->grid);
-	const glong num_points_dense  = cartesian_grid_3d_num_points(&eri_dense->grid);
+	const glong num_points_dense  = cartesian_grid_3d_num_points(grid_dense);
 	assert(num_points_sparse > 0);
 	assert(num_points_dense  > 0);
 
@@ -744,73 +738,73 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* restrict 
 	evaluate_octahedral_grid_permutations(&eri_sparse->grid, octahedral_perm);
 
 	#pragma omp parallel for collapse(4)
-	for (glong icx = 0; icx < eri_dense->grid.coord_range[0].num; ++icx)
+	for (glong icx = 0; icx < grid_dense->coord_range[0].num; ++icx)
 	{
-		for (glong jcx = 0; jcx < eri_dense->grid.coord_range[0].num; ++jcx)
+		for (glong jcx = 0; jcx < grid_dense->coord_range[0].num; ++jcx)
 		{
-			for (glong kcx = 0; kcx < eri_dense->grid.coord_range[0].num; ++kcx)
+			for (glong kcx = 0; kcx < grid_dense->coord_range[0].num; ++kcx)
 			{
-				for (glong lcx = 0; lcx < eri_dense->grid.coord_range[0].num; ++lcx)
+				for (glong lcx = 0; lcx < grid_dense->coord_range[0].num; ++lcx)
 				{
 					// x-coordinate of orbital box center times 2
-					const glong center_x = 2 * eri_dense->grid.coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
-					                                                                   lmax(lmax(lmax(icx, jcx), kcx), lcx);
+					const glong center_x = 2 * grid_dense->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
+					                                                               lmax(lmax(lmax(icx, jcx), kcx), lcx);
 					const glong trans_x = center_x / 2;
 					assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
 
-					for (glong icy = 0; icy < eri_dense->grid.coord_range[1].num; ++icy)
+					for (glong icy = 0; icy < grid_dense->coord_range[1].num; ++icy)
 					{
-						for (glong jcy = 0; jcy < eri_dense->grid.coord_range[1].num; ++jcy)
+						for (glong jcy = 0; jcy < grid_dense->coord_range[1].num; ++jcy)
 						{
-							for (glong kcy = 0; kcy < eri_dense->grid.coord_range[1].num; ++kcy)
+							for (glong kcy = 0; kcy < grid_dense->coord_range[1].num; ++kcy)
 							{
-								for (glong lcy = 0; lcy < eri_dense->grid.coord_range[1].num; ++lcy)
+								for (glong lcy = 0; lcy < grid_dense->coord_range[1].num; ++lcy)
 								{
 									// y-coordinate of orbital box center times 2
-									const glong center_y = 2 * eri_dense->grid.coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
-									                                                                   lmax(lmax(lmax(icy, jcy), kcy), lcy);
+									const glong center_y = 2 * grid_dense->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
+									                                                               lmax(lmax(lmax(icy, jcy), kcy), lcy);
 									const glong trans_y = center_y / 2;
 									assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
 
-									for (glong icz = 0; icz < eri_dense->grid.coord_range[2].num; ++icz)
+									for (glong icz = 0; icz < grid_dense->coord_range[2].num; ++icz)
 									{
-										for (glong jcz = 0; jcz < eri_dense->grid.coord_range[2].num; ++jcz)
+										for (glong jcz = 0; jcz < grid_dense->coord_range[2].num; ++jcz)
 										{
-											for (glong kcz = 0; kcz < eri_dense->grid.coord_range[2].num; ++kcz)
+											for (glong kcz = 0; kcz < grid_dense->coord_range[2].num; ++kcz)
 											{
-												for (glong lcz = 0; lcz < eri_dense->grid.coord_range[2].num; ++lcz)
+												for (glong lcz = 0; lcz < grid_dense->coord_range[2].num; ++lcz)
 												{
 													// z-coordinate of orbital box center times 2
-													const glong center_z = 2 * eri_dense->grid.coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
-													                                                                   lmax(lmax(lmax(icz, jcz), kcz), lcz);
+													const glong center_z = 2 * grid_dense->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
+													                                                               lmax(lmax(lmax(icz, jcz), kcz), lcz);
 													const glong trans_z = center_z / 2;
 													assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
 
-													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, icx, icy, icz);
-													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, jcx, jcy, jcz);
-													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, kcx, kcy, kcz);
-													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri_dense->grid, lcx, lcy, lcz);
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, jcx, jcy, jcz);
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, lcx, lcy, lcz);
 													const glong idx_tensor_dense  = ((idx_i * num_points_dense + idx_j) * num_points_dense + idx_k) * num_points_dense + idx_l;
 
 													const union cartesian_grid_point_3d pt_i_p = {
-														.x = eri_dense->grid.coord_range[0].istart + icx - trans_x,
-														.y = eri_dense->grid.coord_range[1].istart + icy - trans_y,
-														.z = eri_dense->grid.coord_range[2].istart + icz - trans_z,
+														.x = grid_dense->coord_range[0].istart + icx - trans_x,
+														.y = grid_dense->coord_range[1].istart + icy - trans_y,
+														.z = grid_dense->coord_range[2].istart + icz - trans_z,
 													};
 													const union cartesian_grid_point_3d pt_j_p = {
-														.x = eri_dense->grid.coord_range[0].istart + jcx - trans_x,
-														.y = eri_dense->grid.coord_range[1].istart + jcy - trans_y,
-														.z = eri_dense->grid.coord_range[2].istart + jcz - trans_z,
+														.x = grid_dense->coord_range[0].istart + jcx - trans_x,
+														.y = grid_dense->coord_range[1].istart + jcy - trans_y,
+														.z = grid_dense->coord_range[2].istart + jcz - trans_z,
 													};
 													const union cartesian_grid_point_3d pt_k_p = {
-														.x = eri_dense->grid.coord_range[0].istart + kcx - trans_x,
-														.y = eri_dense->grid.coord_range[1].istart + kcy - trans_y,
-														.z = eri_dense->grid.coord_range[2].istart + kcz - trans_z,
+														.x = grid_dense->coord_range[0].istart + kcx - trans_x,
+														.y = grid_dense->coord_range[1].istart + kcy - trans_y,
+														.z = grid_dense->coord_range[2].istart + kcz - trans_z,
 													};
 													const union cartesian_grid_point_3d pt_l_p = {
-														.x = eri_dense->grid.coord_range[0].istart + lcx - trans_x,
-														.y = eri_dense->grid.coord_range[1].istart + lcy - trans_y,
-														.z = eri_dense->grid.coord_range[2].istart + lcz - trans_z,
+														.x = grid_dense->coord_range[0].istart + lcx - trans_x,
+														.y = grid_dense->coord_range[1].istart + lcy - trans_y,
+														.z = grid_dense->coord_range[2].istart + lcz - trans_z,
 													};
 													const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_i_p);
 													const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_j_p);
@@ -818,7 +812,7 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* restrict 
 													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_l_p);
 													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
 
-													eri_dense->integral_values[idx_tensor_dense] = sparse_eri_gausslet_integrals_get_value(eri_sparse, idx_tensor_sparse);
+													eri_tensor[idx_tensor_dense] = sparse_eri_gausslet_integrals_get_value(eri_sparse, idx_tensor_sparse);
 												}
 											}
 										}
@@ -840,9 +834,11 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* restrict 
 
 //________________________________________________________________________________________________________________________
 ///
-/// \brief Delete electron repulsion integral storage structure (free memory).
+/// \brief Delete the sparse electron repulsion integral storage structure (free memory).
 ///
-void delete_eri_gausslet_integrals(struct eri_gausslet_integrals* eri)
+void delete_sparse_eri_gausslet_integrals(struct sparse_eri_gausslet_integrals* eri)
 {
+	aligned_free(eri->four_indices);
 	aligned_free(eri->integral_values);
+	eri->num_entries = 0;
 }

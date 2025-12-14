@@ -43,8 +43,12 @@ char* test_eri_integrals()
 		return "reading tolerance from disk failed";
 	}
 
+	struct sparse_eri_indices eri_indices;
+	enumerate_symmetry_reduced_eri_indices(&grid_sparse, &eri_indices);
+
 	struct sparse_eri_gausslet_integrals eri_sparse;
-	compute_sparse_eri_gausslet_integrals(&gdata, &grid_sparse, tol, &eri_sparse);
+	compute_sparse_eri_gausslet_integrals(&gdata, &grid_sparse, eri_indices.four_indices, eri_indices.num, tol, &eri_sparse);
+	delete_sparse_eri_indices(&eri_indices);
 
 	const struct cartesian_grid_3d grid_dense = {
 		.coord_range = {
@@ -55,12 +59,10 @@ char* test_eri_integrals()
 	};
 
 	// reconstruct full tensor
-	struct eri_gausslet_integrals eri_dense;
-	eri_dense.grid = grid_dense;
 	const glong num_points = cartesian_grid_3d_num_points(&grid_dense);
 	const glong num_entries = num_points * num_points * num_points * num_points;
-	eri_dense.integral_values = aligned_malloc(num_entries * sizeof(eri_dense.integral_values[0]));
-	fill_dense_eri_tensor(&eri_sparse, &eri_dense);
+	double* eri_tensor = aligned_malloc(num_entries * sizeof(eri_tensor[0]));
+	fill_dense_eri_tensor(&eri_sparse, &grid_dense, eri_tensor);
 
 	// reference data
 	double* eri_ref = aligned_malloc(num_entries * sizeof(eri_ref[0]));
@@ -69,12 +71,12 @@ char* test_eri_integrals()
 	}
 
 	// compare
-	if (uniform_distance(num_entries, eri_dense.integral_values, eri_ref) > 1e-13) {
+	if (uniform_distance(num_entries, eri_tensor, eri_ref) > 1e-13) {
 		return "electron repulsion integral values do not match reference";
 	}
 
 	aligned_free(eri_ref);
-	delete_eri_gausslet_integrals(&eri_dense);
+	aligned_free(eri_tensor);
 	delete_sparse_eri_gausslet_integrals(&eri_sparse);
 	aligned_free(gdata.coefficients);
 

@@ -62,24 +62,31 @@ int main()
 	// get the tick resolution
 	const double ticks_per_sec = (double)get_tick_resolution();
 
-	printf("Evaluating the electron repulsion integrals (ERIs) for Gausslet orbitals and %li grid points... ", num_points);
-	const uint64_t tick_start = get_time_ticks();
-	struct sparse_eri_gausslet_integrals eri;
-	compute_sparse_eri_gausslet_integrals(&gdata, &grid, tol, &eri);
-	const uint64_t tick_end = get_time_ticks();
+	printf("Enumerating symmetry-reduced electron repulsion integral (ERI) indices for a %li x %li x %li grid... ", grid.coord_range[0].num, grid.coord_range[1].num, grid.coord_range[2].num);
+	const uint64_t tick_start_indices = get_time_ticks();
+	struct sparse_eri_indices eri_indices;
+	enumerate_symmetry_reduced_eri_indices(&grid, &eri_indices);
+	const uint64_t tick_end_indices = get_time_ticks();
 	printf("Done.\n");
+	printf("number of indices (after translational, octahedral and permutational symmetry reductions): %li, reduction factor: %g\n",
+		eri_indices.num, (double)eri_indices.num / (num_points * num_points * num_points * num_points));
+	printf("wall clock time: %g seconds\n", (tick_end_indices - tick_start_indices) / ticks_per_sec);
 
-	printf("number of entries (after octahedral and permutational symmetry reductions): %li\n", eri.num_entries);
+	printf("Evaluating %li electron repulsion integrals (ERIs)... ", eri_indices.num);
+	const uint64_t tick_start_integrals = get_time_ticks();
+	struct sparse_eri_gausslet_integrals eri_integrals;
+	compute_sparse_eri_gausslet_integrals(&gdata, &grid, eri_indices.four_indices, eri_indices.num, tol, &eri_integrals);
+	const uint64_t tick_end_integrals = get_time_ticks();
+	printf("Done.\n");
+	printf("wall clock time: %g seconds\n", (tick_end_integrals - tick_start_integrals) / ticks_per_sec);
 
 	// index of origin
 	union cartesian_grid_point_3d pt_origin = { 0 };
 	const glong iorigin = cartesian_grid_point_3d_to_linear_index(&grid, &pt_origin);
 	const glong idx_tensor = ((iorigin * num_points + iorigin) * num_points + iorigin) * num_points + iorigin;
-	printf("ERI for all Gausslets at origin: %.17g\n", sparse_eri_gausslet_integrals_get_value(&eri, idx_tensor));
+	printf("ERI for all Gausslets at origin: %.17g\n", sparse_eri_gausslet_integrals_get_value(&eri_integrals, idx_tensor));
 
-	printf("wall clock time: %g seconds\n", (tick_end - tick_start) / ticks_per_sec);
-
-	delete_sparse_eri_gausslet_integrals(&eri);
+	delete_sparse_eri_gausslet_integrals(&eri_integrals);
 	aligned_free(gdata.coefficients);
 
 	return 0;
