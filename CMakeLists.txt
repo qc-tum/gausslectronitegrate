@@ -53,6 +53,13 @@ if (ENABLE_GAUSSLECTRONITEGRATE_PYTHON_MODULE)
 endif()
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)  # test whether current project is a stand-alone project
+    add_executable(            gli_eri_integrals ${GAUSSLECTRONITEGRATE_SOURCES} "cli/gli_eri_integrals.c")
+    target_include_directories(gli_eri_integrals PRIVATE ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
+    target_link_libraries(     gli_eri_integrals PRIVATE ${HDF5_LIBRARIES})
+    if (OpenMP_C_FOUND)
+        target_link_libraries( gli_eri_integrals PRIVATE OpenMP::OpenMP_C)
+    endif()
+
     add_executable(            perf_eri_integrals ${GAUSSLECTRONITEGRATE_SOURCES} "perf/perf_eri_integrals.c")
     target_include_directories(perf_eri_integrals PRIVATE ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
     target_link_libraries(     perf_eri_integrals PRIVATE ${HDF5_LIBRARIES})

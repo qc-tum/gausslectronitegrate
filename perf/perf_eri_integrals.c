@@ -77,6 +77,7 @@ int main()
 	struct sparse_eri_gausslet_integrals eri_integrals;
 	compute_sparse_eri_gausslet_integrals(&gdata, &grid, eri_indices.four_indices, eri_indices.num, tol, &eri_integrals);
 	const uint64_t tick_end_integrals = get_time_ticks();
+	delete_sparse_eri_indices(&eri_indices);
 	printf("Done.\n");
 	printf("wall clock time: %g seconds\n", (tick_end_integrals - tick_start_integrals) / ticks_per_sec);
 
