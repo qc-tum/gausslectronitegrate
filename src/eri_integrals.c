@@ -211,7 +211,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 ///
 /// \brief Evaluate the 3D grid point permutations effected by the octahedral point group elements.
 ///
-static void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48])
+void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48])
 {
 	const glong num_points = cartesian_grid_3d_num_points(grid);
 
@@ -228,7 +228,7 @@ static void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d
 /// \brief Compute the minimal combined 4-index appearing within the octahedral group orbit
 /// and i <-> j, k <-> l, (i, j) <-> (k, l) permutation symmetry.
 ///
-static inline glong minimum_octahedral_orbit_eri_tensor_index(
+glong minimum_octahedral_orbit_eri_tensor_index(
 	const glong num_points, const glong* octahedral_perm[48],
 	const glong i, const glong j, const glong k, const glong l)
 {

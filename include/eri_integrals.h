@@ -7,6 +7,14 @@
 double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[4], const double tol);
 
 
+void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48]);
+
+
+glong minimum_octahedral_orbit_eri_tensor_index(
+	const glong num_points, const glong* octahedral_perm[48],
+	const glong i, const glong j, const glong k, const glong l);
+
+
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Array of linearized electron repulsion integral four-indices (ij|kl), and corresponding meta-information.
