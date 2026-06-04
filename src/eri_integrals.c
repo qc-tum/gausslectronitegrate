@@ -851,7 +851,7 @@ void project_sparse_eri_gausslet_integrals(const struct sparse_eri_gausslet_inte
 				trans_range[i].num = eri->grid.coord_range[i].num - (cmax - cmin);
 			}
 
-			// filter out negative box center coordinates to ensure every admissible (ij|kl) index is covered once
+			// filter out negative box center coordinates to ensure that every admissible (ij|kl) index is covered once
 			if (center.x < 0 || center.y < 0 || center.z < 0) {
 				continue;
 			}
