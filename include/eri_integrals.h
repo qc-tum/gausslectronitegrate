@@ -7,7 +7,8 @@
 double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[4], const double tol);
 
 
-void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48]);
+//________________________________________________________________________________________________________________________
+//
 
 
 glong minimum_octahedral_orbit_eri_tensor_index(

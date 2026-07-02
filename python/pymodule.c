@@ -8,6 +8,7 @@
 #include "kinetic_integrals.h"
 #include "nuclear_integrals.h"
 #include "eri_integrals.h"
+#include "symmetry.h"
 #include "hdf5_util.h"
 #include "aligned_memory.h"
 

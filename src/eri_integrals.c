@@ -5,6 +5,7 @@
 #include "eri_integrals.h"
 #include "gausslet_factors.h"
 #include "symmetry.h"
+#include "index_list.h"
 #include "aligned_memory.h"
 
 
@@ -195,7 +196,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 
 				pt[2] = center_diff[2] + (istart.z + sz) / 6.0;
 
-				val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
+				val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3, vec3_norm(pt));
 			}
 		}
 	}
@@ -204,22 +205,6 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 	delete_gausslet_factor_products(&gfp);
 
 	return val;
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Evaluate the 3D grid point permutations effected by the octahedral point group elements.
-///
-void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48])
-{
-	const glong num_points = cartesian_grid_3d_num_points(grid);
-
-	for (int i = 0; i < 48; ++i)
-	{
-		perm[i] = aligned_malloc(num_points * sizeof(perm[i][0]));
-		compute_cartesian_grid_3d_permutation(grid, &octahedral_matrep[i], perm[i]);
-	}
 }
 
 
@@ -412,78 +397,6 @@ int enumerate_octahedral_orbit_eri_tensor_indices(
 	}
 
 	return b + 1;
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Linked list node for storing indices.
-///
-struct index_list_node
-{
-	glong data;                    //!< index data entry
-	struct index_list_node* next;  //!< pointer to next node
-};
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Linked list for storing indices.
-///
-struct index_list
-{
-	struct index_list_node* head;  //!< pointer to head node, NULL for an empty list
-	glong size;                    //!< number of entries in the list
-};
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Add a new node to the linked list.
-///
-static inline void index_list_add_entry(struct index_list* list, const glong index)
-{
-	struct index_list_node* new_node = aligned_malloc(sizeof(new_node[0]));
-	new_node->data = index;
-	new_node->next = list->head;
-
-	list->head = new_node;
-	list->size++;
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Copy the entries of the list into a linear array.
-///
-static void index_list_to_array(const struct index_list* list, glong* entries)
-{
-	const struct index_list_node* node = list->head;
-	glong i = 0;
-	while (node != NULL)
-	{
-		entries[i] = node->data;
-		node = node->next;
-		i++;
-	}
-	assert(i == list->size);
-}
-
-
-//________________________________________________________________________________________________________________________
-///
-/// \brief Delete the linked list (free memory).
-///
-static void delete_index_list(struct index_list* list)
-{
-	while (list->head != NULL)
-	{
-		struct index_list_node* next = list->head->next;
-		aligned_free(list->head);
-		list->size--;
-		list->head = next;
-	}
-	assert(list->size == 0);
 }
 
 
@@ -739,7 +652,7 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 
 					pt[2] = center_diff[2] + (istart.z + sz) / 6.0;
 
-					val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3,  vec3_norm(pt));
+					val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3, vec3_norm(pt));
 				}
 			}
 		}

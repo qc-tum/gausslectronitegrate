@@ -1,4 +1,5 @@
 #include "symmetry.h"
+#include "aligned_memory.h"
 
 
 // The following matrix representation was obtained via the Mathematica command
@@ -129,5 +130,21 @@ void compute_cartesian_grid_3d_permutation(const struct cartesian_grid_3d* grid,
 		transform_cartesian_grid_point_3d(trans, &pt, &transformed_pt);
 
 		perm[idx] = cartesian_grid_point_3d_to_linear_index(grid, &transformed_pt);
+	}
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Evaluate the 3D grid point permutations effected by the octahedral point group elements.
+///
+void evaluate_octahedral_grid_permutations(const struct cartesian_grid_3d* grid, glong* perm[48])
+{
+	const glong num_points = cartesian_grid_3d_num_points(grid);
+
+	for (int i = 0; i < 48; ++i)
+	{
+		perm[i] = aligned_malloc(num_points * sizeof(perm[i][0]));
+		compute_cartesian_grid_3d_permutation(grid, &octahedral_matrep[i], perm[i]);
 	}
 }
