@@ -8,6 +8,7 @@
 #include "kinetic_integrals.h"
 #include "nuclear_integrals.h"
 #include "eri_integrals.h"
+#include "erida_integrals.h"
 #include "symmetry.h"
 #include "hdf5_util.h"
 #include "aligned_memory.h"
@@ -639,75 +640,6 @@ static PyObject* Py_compute_eri_gausslet_integral(PyObject* Py_UNUSED(self), PyO
 }
 
 
-static PyObject* Py_compute_eri_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
-{
-	const char* syntax = "compute_eri_gausslet_integrals(gausslet_coeffs, grid, tol)";
-
-	PyObject* py_gausslet_coeffs;
-	PyObject* py_grid;
-	double tol;
-
-	// parse input arguments
-	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid, &tol)) {
-		char msg[1024];
-		sprintf(msg, "error parsing input; syntax: %s", syntax);
-		PyErr_SetString(PyExc_SyntaxError, msg);
-		return NULL;
-	}
-
-	// Gausslet coefficients
-	struct gausslet_data gdata;
-	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
-		return NULL;
-	}
-
-	// grid specification
-	struct cartesian_grid_3d grid;
-	if (parse_cartesian_grid(py_grid, syntax, &grid) < 0) {
-		return NULL;
-	}
-
-	// extend to a rotationally symmetric grid for the "sparse" calculation
-	const glong extent = lmax(lmax(
-		lmax(labs(grid.coord_range[0].istart), labs(grid.coord_range[0].istart + grid.coord_range[0].num - 1)),
-		lmax(labs(grid.coord_range[1].istart), labs(grid.coord_range[1].istart + grid.coord_range[1].num - 1))),
-		lmax(labs(grid.coord_range[2].istart), labs(grid.coord_range[2].istart + grid.coord_range[2].num - 1)));
-	struct cartesian_grid_3d grid_sparse = {
-		.coord_range = {
-			{ .istart = -extent, .num = 2 * extent + 1 },
-			{ .istart = -extent, .num = 2 * extent + 1 },
-			{ .istart = -extent, .num = 2 * extent + 1 },
-		}
-	};
-
-	// compute electron repulsion integrals (ERIs), exploiting translational and rotational invariance
-	struct sparse_eri_indices eri_indices;
-	enumerate_symmetry_reduced_eri_indices(&grid_sparse, &eri_indices);
-	struct sparse_eri_gausslet_integrals eri_sparse;
-	compute_sparse_eri_gausslet_integrals(&gdata, &grid_sparse, eri_indices.four_indices, eri_indices.num, tol, &eri_sparse);
-	delete_sparse_eri_indices(&eri_indices);
-	aligned_free(gdata.coefficients);
-
-	// create NumPy array of degree 4 to store the full ERI tensor
-	const glong num_points = cartesian_grid_3d_num_points(&grid);
-	npy_intp dims[4] = { num_points, num_points, num_points, num_points };
-	PyArrayObject* py_eri_tensor = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
-	if (py_eri_tensor == NULL) {
-		char msg[1024];
-		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
-		PyErr_SetString(PyExc_RuntimeError, msg);
-		return NULL;
-	}
-
-	// fill dense tensor entries
-	fill_dense_eri_tensor(&eri_sparse, &grid, PyArray_DATA(py_eri_tensor));
-
-	delete_sparse_eri_gausslet_integrals(&eri_sparse);
-
-	return (PyObject*)py_eri_tensor;
-}
-
-
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Python sparse electron repulsion integral (ERI) object.
@@ -882,6 +814,63 @@ static PyObject* PySparseERI_project(PySparseERIObject* self, PyObject* args)
 }
 
 
+static PyObject* PySparseERI_fill_tensor(PySparseERIObject* self, PyObject* args)
+{
+	if (self->eri.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERI object has not been initialized yet");
+		return NULL;
+	}
+
+	const char* syntax = "fill_tensor(dense_grid)";
+
+	// parse input arguments
+	PyObject* py_dense_grid;
+	if (!PyArg_ParseTuple(args, "O", &py_dense_grid)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// dense grid specification
+	struct cartesian_grid_3d dense_grid;
+	if (parse_cartesian_grid(py_dense_grid, syntax, &dense_grid) < 0) {
+		return NULL;
+	}
+
+	// check extent
+	const glong extent = lmax(lmax(
+		lmax(labs(dense_grid.coord_range[0].istart), labs(dense_grid.coord_range[0].istart + dense_grid.coord_range[0].num - 1)),
+		lmax(labs(dense_grid.coord_range[1].istart), labs(dense_grid.coord_range[1].istart + dense_grid.coord_range[1].num - 1))),
+		lmax(labs(dense_grid.coord_range[2].istart), labs(dense_grid.coord_range[2].istart + dense_grid.coord_range[2].num - 1)));
+	if (self->eri.grid.coord_range[0].num < 2 * extent + 1 ||
+	    self->eri.grid.coord_range[1].num < 2 * extent + 1 ||
+	    self->eri.grid.coord_range[2].num < 2 * extent + 1)
+	{
+		char msg[1024];
+		sprintf(msg, "sparse ERI grid too small to fill all values for the provided grid (extent %li); syntax: %s", extent, syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// create NumPy array of degree 4 to store the full ERI tensor
+	const glong num_points_dense = cartesian_grid_3d_num_points(&dense_grid);
+	npy_intp dims[4] = { num_points_dense, num_points_dense, num_points_dense, num_points_dense };
+	PyArrayObject* py_dense_eri_tensor = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
+	if (py_dense_eri_tensor == NULL) {
+		char msg[1024];
+		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
+		PyErr_SetString(PyExc_RuntimeError, msg);
+		return NULL;
+	}
+
+	// fill dense tensor entries
+	fill_dense_eri_tensor(&self->eri, &dense_grid, PyArray_DATA(py_dense_eri_tensor));
+
+	return (PyObject*)py_dense_eri_tensor;
+}
+
+
 static PyMethodDef PySparseERI_methods[] = {
 	{
 		.ml_name  = "integral_value",
@@ -894,6 +883,12 @@ static PyMethodDef PySparseERI_methods[] = {
 		.ml_meth  = (PyCFunction)PySparseERI_project,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Project the ERI tensor onto the specified basis along each axis.",
+	},
+	{
+		.ml_name  = "fill_tensor",
+		.ml_meth  = (PyCFunction)PySparseERI_fill_tensor,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Fill the dense electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals.",
 	},
 	{
 		0  // sentinel
@@ -1233,6 +1228,405 @@ static PyObject* Py_load_sparse_eri_gausslet_integrals(PyObject* Py_UNUSED(self)
 }
 
 
+static PyObject* Py_compute_erida_gausslet_integral(PyObject* Py_UNUSED(self), PyObject* args)
+{
+	const char* syntax = "compute_erida_gausslet_integral(gausslet_coeffs, grid_points, tol)";
+
+	PyObject* py_gausslet_coeffs;
+	PyObject* py_grid_points;
+	double tol;
+
+	// parse input arguments
+	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid_points, &tol)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// Gausslet coefficients
+	struct gausslet_data gdata;
+	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &gdata) < 0) {
+		return NULL;
+	}
+
+	// grid points
+	union cartesian_grid_point_3d grid_points[2];
+	if (parse_cartesian_grid_points(py_grid_points, syntax, 2, grid_points) < 0) {
+		return NULL;
+	}
+
+	// compute electron repulsion integral using the integral diagonal approximation (ERIDA)
+	const double erida = compute_erida_gausslet_integral(&gdata, grid_points, tol);
+
+	aligned_free(gdata.coefficients);
+
+	return PyFloat_FromDouble(erida);
+}
+
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Python object storing sparse electron repulsion integrals using the integral diagonal approximation (ERIDA).
+///
+typedef struct
+{
+	PyObject_HEAD
+	struct gausslet_data gdata;
+	struct sparse_erida_gausslet_integrals erida;
+	glong* octahedral_perm[48];
+	double tol;
+}
+PySparseERIDAObject;
+
+
+static PyObject* PySparseERIDA_new(PyTypeObject* type, PyObject* Py_UNUSED(args), PyObject* Py_UNUSED(kwds))
+{
+	PySparseERIDAObject* self = (PySparseERIDAObject*)type->tp_alloc(type, 0);
+	if (self != NULL) {
+		memset(&self->erida, 0, sizeof(self->erida));
+	}
+	return (PyObject*)self;
+}
+
+
+static void PySparseERIDA_dealloc(PySparseERIDAObject* self)
+{
+	if (self->erida.integral_values != NULL)
+	{
+		// assuming that the ERIDA structure has been initialized
+		for (int i = 0; i < 48; ++i) {
+			aligned_free(self->octahedral_perm[i]);
+		}
+		aligned_free(self->gdata.coefficients);
+		delete_sparse_erida_gausslet_integrals(&self->erida);
+	}
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+
+static PyObject* PySparseERIDA_integral_value(PySparseERIDAObject* self, PyObject* args)
+{
+	if (self->erida.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERIDA object has not been initialized yet");
+		return NULL;
+	}
+
+	const char* syntax = "integral_value(grid_points)";
+
+	// parse input arguments
+	PyObject* py_grid_points;
+	if (!PyArg_ParseTuple(args, "O", &py_grid_points)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+	union cartesian_grid_point_3d grid_points[2];
+	if (parse_cartesian_grid_points(py_grid_points, syntax, 2, grid_points) < 0) {
+		return NULL;
+	}
+
+	const struct cartesian_grid_3d* grid = &self->erida.grid;
+
+	const glong num_points = cartesian_grid_3d_num_points(grid);
+	assert(num_points > 0);
+
+	// shift orbital box center to origin
+	for (int i = 0; i < 3; ++i)
+	{
+		// i-th coordinate of orbital box center times 2
+		const glong center = lmin(grid_points[0].c[i], grid_points[1].c[i]) +
+		                     lmax(grid_points[0].c[i], grid_points[1].c[i]);
+		const glong trans = center / 2;
+		assert(-1 <= center - 2 * trans && center - 2 * trans <= 1);
+		grid_points[0].c[i] -= trans;
+		grid_points[1].c[i] -= trans;
+	}
+
+	// check input coordinate ranges
+	for (int k = 0; k < 2; ++k)
+	{
+		for (int i = 0; i < 3; ++i)
+		{
+			const glong idx = grid_points[k].c[i] - grid->coord_range[i].istart;
+
+			if (!(0 <= idx && idx < grid->coord_range[i].num))
+			{
+				const char* coord_str[3] = { "x", "y", "z" };
+				char msg[1024];
+				sprintf(msg, "%s-coordinate of grid point %i (after box center translation) out of range; syntax: %s", coord_str[i], k, syntax);
+				PyErr_SetString(PyExc_SyntaxError, msg);
+				return NULL;
+			}
+		}
+	}
+
+	const glong idx0 = cartesian_grid_point_3d_to_linear_index(&self->erida.grid, &grid_points[0]);
+	const glong idx1 = cartesian_grid_point_3d_to_linear_index(&self->erida.grid, &grid_points[1]);
+	const glong idx_tensor = minimum_octahedral_orbit_erida_tensor_index(num_points, (const glong**)self->octahedral_perm, idx0, idx1);
+
+	const double value = sparse_erida_gausslet_integrals_get_value(&self->erida, idx_tensor);
+
+	return PyFloat_FromDouble(value);
+}
+
+
+static PyObject* PySparseERIDA_fill_matrix(PySparseERIDAObject* self, PyObject* args)
+{
+	if (self->erida.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERIDA object has not been initialized yet");
+		return NULL;
+	}
+
+	const char* syntax = "fill_matrix(dense_grid)";
+
+	// parse input arguments
+	PyObject* py_dense_grid;
+	if (!PyArg_ParseTuple(args, "O", &py_dense_grid)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// dense grid specification
+	struct cartesian_grid_3d dense_grid;
+	if (parse_cartesian_grid(py_dense_grid, syntax, &dense_grid) < 0) {
+		return NULL;
+	}
+
+	// check extent
+	const glong extent = lmax(lmax(
+		lmax(labs(dense_grid.coord_range[0].istart), labs(dense_grid.coord_range[0].istart + dense_grid.coord_range[0].num - 1)),
+		lmax(labs(dense_grid.coord_range[1].istart), labs(dense_grid.coord_range[1].istart + dense_grid.coord_range[1].num - 1))),
+		lmax(labs(dense_grid.coord_range[2].istart), labs(dense_grid.coord_range[2].istart + dense_grid.coord_range[2].num - 1)));
+	if (self->erida.grid.coord_range[0].num < 2 * extent + 1 ||
+	    self->erida.grid.coord_range[1].num < 2 * extent + 1 ||
+	    self->erida.grid.coord_range[2].num < 2 * extent + 1)
+	{
+		char msg[1024];
+		sprintf(msg, "sparse ERIDA grid too small to fill all values for the provided grid (extent %li); syntax: %s", extent, syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// create NumPy array of degree 2 to store the full ERIDA matrix
+	const glong num_points_dense = cartesian_grid_3d_num_points(&dense_grid);
+	npy_intp dims[2] = { num_points_dense, num_points_dense };
+	PyArrayObject* py_dense_erida_matrix = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+	if (py_dense_erida_matrix == NULL) {
+		char msg[1024];
+		sprintf(msg, "error creating NumPy array for return value - consider decreasing the number of grid points; syntax: %s", syntax);
+		PyErr_SetString(PyExc_RuntimeError, msg);
+		return NULL;
+	}
+
+	// fill dense entries
+	fill_dense_erida_matrix(&self->erida, &dense_grid, PyArray_DATA(py_dense_erida_matrix));
+
+	return (PyObject*)py_dense_erida_matrix;
+}
+
+
+static PyMethodDef PySparseERIDA_methods[] = {
+	{
+		.ml_name  = "integral_value",
+		.ml_meth  = (PyCFunction)PySparseERIDA_integral_value,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Return the ERIDA integral value at the specified coordinates.",
+	},
+	{
+		.ml_name  = "fill_matrix",
+		.ml_meth  = (PyCFunction)PySparseERIDA_fill_matrix,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Fill the dense matrix entries with the electron repulsion integrals using the integral diagonal approximation (ERIDA) for Gausslet orbitals."
+	},
+	{
+		0  // sentinel
+	},
+};
+
+
+static PyObject* PySparseERIDA_grid(PySparseERIDAObject* self, void* Py_UNUSED(closure))
+{
+	if (self->erida.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERIDA object has not been initialized yet");
+		return NULL;
+	}
+
+	PyObject* py_coord_range[3];
+	for (int i = 0; i < 3; ++i) {
+		py_coord_range[i] = PyTuple_Pack(2,
+			PyLong_FromLong(self->erida.grid.coord_range[i].istart),
+			PyLong_FromLong(self->erida.grid.coord_range[i].num));
+	}
+
+	return PyTuple_Pack(3, py_coord_range[0], py_coord_range[1], py_coord_range[2]);
+}
+
+
+static PyObject* PySparseERIDA_tol(PySparseERIDAObject* self, void* Py_UNUSED(closure))
+{
+	if (self->erida.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERIDA object has not been initialized yet");
+		return NULL;
+	}
+
+	return PyFloat_FromDouble(self->tol);
+}
+
+
+static PyObject* PySparseERIDA_num_entries(PySparseERIDAObject* self, void* Py_UNUSED(closure))
+{
+	if (self->erida.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERIDA object has not been initialized yet");
+		return NULL;
+	}
+
+	return PyLong_FromLong(self->erida.num_entries);
+}
+
+
+static PyObject* PySparseERIDA_gausslet_coeffs(PySparseERIDAObject* self, void* Py_UNUSED(closure))
+{
+	if (self->erida.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERIDA object has not been initialized yet");
+		return NULL;
+	}
+
+	npy_intp dims[1] = { self->gdata.indices.num };
+	PyArrayObject* py_coeffs = (PyArrayObject*)PyArray_SimpleNew(1, dims, NPY_DOUBLE);
+	if (py_coeffs == NULL) {
+		PyErr_SetString(PyExc_RuntimeError, "error creating NumPy vector");
+		return NULL;
+	}
+	memcpy(PyArray_DATA(py_coeffs), self->gdata.coefficients, self->gdata.indices.num * sizeof(double));
+
+	return (PyObject*)py_coeffs;
+}
+
+
+static struct PyGetSetDef PySparseERIDA_getset[] = {
+	{
+		.name    = "grid",
+		.get     = (getter)PySparseERIDA_grid,
+		.set     = NULL,
+		.doc     = "underlying Cartesian grid",
+		.closure = NULL,
+	},
+	{
+		.name    = "tol",
+		.get     = (getter)PySparseERIDA_tol,
+		.set     = NULL,
+		.doc     = "truncation tolerance used for calculating the ERIDAs",
+		.closure = NULL,
+	},
+	{
+		.name    = "num_entries",
+		.get     = (getter)PySparseERIDA_num_entries,
+		.set     = NULL,
+		.doc     = "number of stored ERIDA values after translational, octahedral and permutational symmetry reductions",
+		.closure = NULL,
+	},
+	{
+		.name    = "gausslet_coeffs",
+		.get     = (getter)PySparseERIDA_gausslet_coeffs,
+		.set     = NULL,
+		.doc     = "Gausslet coefficients used for calculating the ERIDAs",
+		.closure = NULL,
+	},
+	{
+		0  // sentinel
+	},
+};
+
+
+static PyTypeObject PySparseERIDAType = {
+	.ob_base      = PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name      = "gausslectronitegrate.SparseERIDA",
+	.tp_doc       = PyDoc_STR("SparseERIDA object"),
+	.tp_basicsize = sizeof(PySparseERIDAObject),
+	.tp_itemsize  = 0,
+	.tp_flags     = Py_TPFLAGS_DEFAULT,
+	.tp_new       = PySparseERIDA_new,
+	.tp_init      = NULL,
+	.tp_dealloc   = (destructor)PySparseERIDA_dealloc,
+	.tp_methods   = PySparseERIDA_methods,
+	.tp_getset    = PySparseERIDA_getset,
+};
+
+
+static PyObject* Py_compute_sparse_erida_gausslet_integrals(PyObject* Py_UNUSED(self), PyObject* args)
+{
+	const char* syntax = "compute_sparse_erida_gausslet_integrals(gausslet_coeffs, grid, tol)";
+
+	PySparseERIDAObject* py_erida = (PySparseERIDAObject*)PySparseERIDA_new(&PySparseERIDAType, NULL, NULL);
+	if (py_erida == NULL) {
+		PyErr_SetString(PyExc_RuntimeError, "error creating SparseERIDA object");
+		return NULL;
+	}
+
+	PyObject* py_gausslet_coeffs;
+	PyObject* py_grid;
+
+	// parse input arguments
+	if (!PyArg_ParseTuple(args, "OOd", &py_gausslet_coeffs, &py_grid, &py_erida->tol)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	if (py_erida->tol < 0) {
+		char msg[1024];
+		sprintf(msg, "'tol' cannot be negative, received %g; syntax: %s", py_erida->tol, syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		return NULL;
+	}
+
+	// Gausslet coefficients
+	if (parse_gausslet_coefficients(py_gausslet_coeffs, syntax, &py_erida->gdata) < 0) {
+		return NULL;
+	}
+
+	// grid specification
+	struct cartesian_grid_3d grid;
+	if (parse_cartesian_grid(py_grid, syntax, &grid) < 0) {
+		return NULL;
+	}
+	// ensure that grid is rotationally symmetric
+	{
+		const glong extent = lmax(lmax(
+			lmax(labs(grid.coord_range[0].istart), labs(grid.coord_range[0].istart + grid.coord_range[0].num - 1)),
+			lmax(labs(grid.coord_range[1].istart), labs(grid.coord_range[1].istart + grid.coord_range[1].num - 1))),
+			lmax(labs(grid.coord_range[2].istart), labs(grid.coord_range[2].istart + grid.coord_range[2].num - 1)));
+
+		for (int i = 0; i < 3; ++i)
+		{
+			if (grid.coord_range[i].istart != -extent || grid.coord_range[i].num != 2 * extent + 1)
+			{
+				char msg[1024];
+				sprintf(msg, "specified grid is not rotationally symmetric; syntax: %s", syntax);
+				PyErr_SetString(PyExc_ValueError, msg);
+				return NULL;
+			}
+		}
+	}
+
+	// precompute the 3D grid point permutations effected by the octahedral point group elements
+	evaluate_octahedral_grid_permutations(&grid, py_erida->octahedral_perm);
+
+	// compute electron repulsion integrals (ERIDAs), exploiting translational, octahedral and permutational symmetries
+	struct sparse_erida_indices erida_indices;
+	enumerate_symmetry_reduced_erida_indices(&grid, &erida_indices);
+	compute_sparse_erida_gausslet_integrals(&py_erida->gdata, &grid, erida_indices.two_indices, erida_indices.num, py_erida->tol, &py_erida->erida);
+	delete_sparse_erida_indices(&erida_indices);
+
+	return (PyObject*)py_erida;
+}
+
+
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Get the maximum number of OpenMP threads, or 0 if OpenMP is not available.
@@ -1294,25 +1688,31 @@ static PyMethodDef methods[] = {
 		.ml_name  = "compute_eri_gausslet_integral",
 		.ml_meth  = Py_compute_eri_gausslet_integral,
 		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate a single electron repulsion integral (ERI) for Gausslet orbitals",
-	},
-	{
-		.ml_name  = "compute_eri_gausslet_integrals",
-		.ml_meth  = Py_compute_eri_gausslet_integrals,
-		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate the electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals",
+		.ml_doc   = "Evaluate a single electron repulsion integral (ERI) for Gausslet orbitals.",
 	},
 	{
 		.ml_name  = "compute_sparse_eri_gausslet_integrals",
 		.ml_meth  = Py_compute_sparse_eri_gausslet_integrals,
 		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Evaluate the sparse representation of the electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals",
+		.ml_doc   = "Evaluate the sparse representation of the electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals.",
 	},
 	{
 		.ml_name  = "load_sparse_eri_gausslet_integrals",
 		.ml_meth  = Py_load_sparse_eri_gausslet_integrals,
 		.ml_flags = METH_VARARGS,
-		.ml_doc   = "Load the sparse representation of the electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals from an HDF5 file",
+		.ml_doc   = "Load the sparse representation of the electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals from an HDF5 file.",
+	},
+	{
+		.ml_name  = "compute_erida_gausslet_integral",
+		.ml_meth  = Py_compute_erida_gausslet_integral,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Evaluate a single electron repulsion integral using the integral diagonal approximation (ERIDA) for Gausslet orbitals.",
+	},
+	{
+		.ml_name  = "compute_sparse_erida_gausslet_integrals",
+		.ml_meth  = Py_compute_sparse_erida_gausslet_integrals,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Evaluate the sparse representation of the electron repulsion integrals using the integral diagonal approximation (ERIDA) for Gausslet orbitals.",
 	},
 	{
 		.ml_name  = "get_max_openmp_threads",
@@ -1348,6 +1748,10 @@ PyMODINIT_FUNC PyInit_gausslectronitegrate_pymodule(void)
 		return NULL;
 	}
 
+	if (PyType_Ready(&PySparseERIDAType) < 0) {
+		return NULL;
+	}
+
 	PyObject* m = PyModule_Create(&module);
 	if (m == NULL) {
 		return NULL;
@@ -1357,6 +1761,14 @@ PyMODINIT_FUNC PyInit_gausslectronitegrate_pymodule(void)
 	Py_INCREF(&PySparseERIType);
 	if (PyModule_AddObject(m, "SparseERI", (PyObject*)&PySparseERIType) < 0) {
 		Py_DECREF(&PySparseERIType);
+		Py_DECREF(m);
+		return NULL;
+	}
+
+	// register sparse ERIDA type
+	Py_INCREF(&PySparseERIDAType);
+	if (PyModule_AddObject(m, "SparseERIDA", (PyObject*)&PySparseERIDAType) < 0) {
+		Py_DECREF(&PySparseERIDAType);
 		Py_DECREF(m);
 		return NULL;
 	}
