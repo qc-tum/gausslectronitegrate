@@ -52,6 +52,7 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 
 double sparse_erida_gausslet_integrals_get_value(const struct sparse_erida_gausslet_integrals* erida, const glong index);
 
+void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_integrals* erida, const double* restrict basis, const glong num_states, double* restrict eri_proj);
 
 void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida_sparse, const struct cartesian_grid_3d* grid_dense, double* erida_matrix);
 

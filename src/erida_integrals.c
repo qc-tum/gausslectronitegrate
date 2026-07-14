@@ -488,6 +488,93 @@ double sparse_erida_gausslet_integrals_get_value(const struct sparse_erida_gauss
 }
 
 
+
+//________________________________________________________________________________________________________________________
+///
+/// \brief Project the electron repulsion integrals using the integral diagonal approximation (ERIDA)
+/// onto the specified basis along each axis. The output tensor has degree four.
+///
+void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_integrals* erida, const double* restrict basis, const glong num_states, double* restrict eri_proj)
+{
+	const glong num_points = cartesian_grid_3d_num_points(&erida->grid);
+	assert(num_points > 0);
+
+	glong* octahedral_perm[48];
+	evaluate_octahedral_grid_permutations(&erida->grid, octahedral_perm);
+
+	memset(eri_proj, 0, num_states * num_states * num_states * num_states * sizeof(eri_proj[0]));
+
+	#pragma omp parallel for collapse(2)
+	for (glong icx = 0; icx < erida->grid.coord_range[0].num; ++icx)
+	{
+		for (glong jcx = 0; jcx < erida->grid.coord_range[0].num; ++jcx)
+		{
+			// x-coordinate of orbital box center times 2
+			const glong center_x = 2 * erida->grid.coord_range[0].istart + lmin(icx, jcx) + lmax(icx, jcx);
+			const glong trans_x = center_x / 2;
+			assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+
+			for (glong icy = 0; icy < erida->grid.coord_range[1].num; ++icy)
+			{
+				for (glong jcy = 0; jcy < erida->grid.coord_range[1].num; ++jcy)
+				{
+					// y-coordinate of orbital box center times 2
+					const glong center_y = 2 * erida->grid.coord_range[1].istart + lmin(icy, jcy) + lmax(icy, jcy);
+					const glong trans_y = center_y / 2;
+					assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+
+					for (glong icz = 0; icz < erida->grid.coord_range[2].num; ++icz)
+					{
+						for (glong jcz = 0; jcz < erida->grid.coord_range[2].num; ++jcz)
+						{
+							// z-coordinate of orbital box center times 2
+							const glong center_z = 2 * erida->grid.coord_range[2].istart + lmin(icz, jcz) + lmax(icz, jcz);
+							const glong trans_z = center_z / 2;
+							assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+
+							const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, icx, icy, icz);
+							const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, jcx, jcy, jcz);
+
+							const glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, icx - trans_x, icy - trans_y, icz - trans_z);
+							const glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, jcx - trans_x, jcy - trans_y, jcz - trans_z);
+							const glong idx_tensor_sparse = minimum_octahedral_orbit_erida_tensor_index(
+								num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p);
+
+							const double val = sparse_erida_gausslet_integrals_get_value(erida, idx_tensor_sparse);
+
+							for (glong p = 0; p < num_states; ++p)
+							{
+								for (glong q = 0; q < num_states; ++q)
+								{
+									for (glong r = 0; r < num_states; ++r)
+									{
+										for (glong s = 0; s < num_states; ++s)
+										{
+											#pragma omp atomic
+											eri_proj[((p * num_states + q) * num_states + r) * num_states + s] +=
+												  basis[idx_i * num_states + p]
+												* basis[idx_i * num_states + q]
+												* basis[idx_j * num_states + r]
+												* basis[idx_j * num_states + s]
+												* val;
+										}
+									}
+								}
+							}
+
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < 48; ++i) {
+		aligned_free(octahedral_perm[i]);
+	}
+}
+
+
 //________________________________________________________________________________________________________________________
 ///
 /// \brief Fill the dense matrix entries with the electron repulsion integrals using the integral diagonal approximation (ERIDA).
