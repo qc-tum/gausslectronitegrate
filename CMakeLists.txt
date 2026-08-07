@@ -60,6 +60,13 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)  # test whether current 
         target_link_libraries( gli_eri_integrals PRIVATE OpenMP::OpenMP_C)
     endif()
 
+    add_executable(            gli_eri_symmetry_reduction ${GAUSSLECTRONITEGRATE_SOURCES} "cli/gli_eri_symmetry_reduction.c")
+    target_include_directories(gli_eri_symmetry_reduction PRIVATE ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
+    target_link_libraries(     gli_eri_symmetry_reduction PRIVATE ${HDF5_LIBRARIES})
+    if (OpenMP_C_FOUND)
+        target_link_libraries( gli_eri_symmetry_reduction PRIVATE OpenMP::OpenMP_C)
+    endif()
+
     add_executable(            perf_eri_integrals ${GAUSSLECTRONITEGRATE_SOURCES} "perf/perf_eri_integrals.c")
     target_include_directories(perf_eri_integrals PRIVATE ${GAUSSLECTRONITEGRATE_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
     target_link_libraries(     perf_eri_integrals PRIVATE ${HDF5_LIBRARIES})
