@@ -1,8 +1,9 @@
 import numpy as np
 import h5py
-from gausslectronic import (
-    get_gausslet_g10_coeffs,
-    eri_gausslet_integrals)
+import sys
+sys.path.append("../gausslets/")
+from gausslet_coefficients import get_gausslet_g10_coeffs
+from eri_integrals import eri_gausslet_integrals
 
 
 def _tuple_diff(ta, tb) -> tuple:

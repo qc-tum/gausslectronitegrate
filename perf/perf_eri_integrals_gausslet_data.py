@@ -1,5 +1,7 @@
 import h5py
-from gausslectronic import get_gausslet_g10_coeffs
+import sys
+sys.path.append("../gausslets/")
+from gausslet_coefficients import get_gausslet_g10_coeffs
 
 
 def perf_eri_integrals_gausslet_data():

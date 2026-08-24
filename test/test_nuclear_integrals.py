@@ -1,8 +1,9 @@
 import numpy as np
 import h5py
-from gausslectronic import (
-    get_gausslet_g10_coeffs,
-    nuclear_gausslet_integrals)
+import sys
+sys.path.append("../gausslets/")
+from gausslet_coefficients import get_gausslet_g10_coeffs
+from nuclear_integrals import nuclear_gausslet_integrals
 
 
 def nuclear_integrals_data():
@@ -33,9 +34,10 @@ def nuclear_integrals_data():
     with h5py.File("data/test_nuclear_integrals.hdf5", "w") as file:
         file.attrs["gausslet_coeffs"] = b_list
         file.attrs["num_nuclei"]      = len(nuclear_pos)
-        for i in range(len(nuclear_pos)):
-            file.attrs[f"nuclear_pos_{i}"]    = nuclear_pos[i]
-            file.attrs[f"nuclear_charge_{i}"] = nuclear_charge[i]
+        for i, p in enumerate(nuclear_pos):
+            file.attrs[f"nuclear_pos_{i}"] = p
+        for i, c in enumerate(nuclear_charge):
+            file.attrs[f"nuclear_charge_{i}"] = c
         file.attrs["tol"] = tol
         file["ngi"] = ngi
 

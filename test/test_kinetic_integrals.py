@@ -1,8 +1,9 @@
 import numpy as np
 import h5py
-from gausslectronic import (
-    get_gausslet_g10_coeffs,
-    kinetic_gausslet_integral)
+import sys
+sys.path.append("../gausslets/")
+from gausslet_coefficients import get_gausslet_g10_coeffs
+from kinetic_integrals import kinetic_gausslet_integral
 
 
 def delta(x, y):
