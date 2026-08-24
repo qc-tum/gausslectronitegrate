@@ -15,13 +15,14 @@
 /// `g(r) = exp(-||r / w||^2) / (sqrt(pi) * w)^3` in three dimensions
 /// with relative distance `dist`.
 ///
-static double gaussian_coulomb_integral_3d(const double w, const double dist)
+static long double gaussian_coulomb_integral_3d(const long double w, const long double dist)
 {
 	if (dist > 0) {
-		return erf(dist / (sqrt(2.) * w)) / dist;
+		return erfl(dist / (sqrtl(2) * w)) / dist;
 	}
 	else {
-		return sqrt(2. / M_PI) / w;
+		// sqrt(2 / pi)
+		return 0.7978845608028653558798921198687637L / w;
 	}
 }
 
@@ -197,7 +198,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 				pt_6_sq[2] = lsquare(center_diff_6[2] + (istart.z + sz));
 
 				val += products[0][sx] * products[1][sy] * products[2][sz]
-					* gaussian_coulomb_integral_3d(1. / 3, sqrtl(pt_6_sq[0] + pt_6_sq[1] + pt_6_sq[2]) / 6);
+					* (double)gaussian_coulomb_integral_3d(1.L / 3, sqrtl(pt_6_sq[0] + pt_6_sq[1] + pt_6_sq[2]) / 6);
 			}
 		}
 	}
@@ -532,8 +533,7 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 	double* coulomb_integral_table = aligned_calloc(num_table_entries * sizeof(coulomb_integral_table[0]));
 	for (glong i = 0; i < num_table_entries; ++i)
 	{
-		// note: using 'long double' square root
-		coulomb_integral_table[i] = gaussian_coulomb_integral_3d(1. / 3, sqrtl(i) / 6);
+		coulomb_integral_table[i] = (double)gaussian_coulomb_integral_3d(1.L / 3, sqrtl(i) / 6);
 	}
 
 	// copy indices

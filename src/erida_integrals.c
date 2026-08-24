@@ -14,13 +14,14 @@
 /// `g(r) = exp(-||r / w||^2) / (sqrt(pi) * w)^3` in three dimensions
 /// with relative distance `dist`.
 ///
-static double gaussian_coulomb_integral_3d(const double w, const double dist)
+static long double gaussian_coulomb_integral_3d(const long double w, const long double dist)
 {
 	if (dist > 0) {
-		return erf(dist / (sqrt(2.) * w)) / dist;
+		return erfl(dist / (sqrtl(2) * w)) / dist;
 	}
 	else {
-		return sqrt(2. / M_PI) / w;
+		// sqrt(2 / pi)
+		return 0.7978845608028653558798921198687637L / w;
 	}
 }
 
@@ -118,7 +119,7 @@ static void delete_gausslet_factor_products(struct gausslet_factor_products* gfp
 double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[2], const double tol)
 {
 	// sqrt(2) / 3
-	const double sqrt2_3 = 0.47140452079103168293;
+	const long double sqrt2_3 = 0.4714045207910316829338962414032327L;
 
 	struct gausslet_factor_products gfp;
 	compute_gausslet_factor_products(gdata, tol, &gfp);
@@ -156,7 +157,7 @@ double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const 
 				pt_3_sq[2] = lsquare(center_diff_3[2] + (gfp.indices.istart + sz));
 
 				val += gfp.products[sx] * gfp.products[sy] * gfp.products[sz]
-					* gaussian_coulomb_integral_3d(sqrt2_3, sqrtl(pt_3_sq[0] + pt_3_sq[1] + pt_3_sq[2]) / 3);
+					* (double)gaussian_coulomb_integral_3d(sqrt2_3, sqrtl(pt_3_sq[0] + pt_3_sq[1] + pt_3_sq[2]) / 3);
 			}
 		}
 	}
@@ -382,7 +383,7 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 	const double tol, struct sparse_erida_gausslet_integrals* erida)
 {
 	// sqrt(2) / 3
-	const double sqrt2_3 = 0.47140452079103168293;
+	const long double sqrt2_3 = 0.4714045207910316829338962414032327L;
 
 	struct gausslet_factor_products gfp;
 	compute_gausslet_factor_products(gdata, tol, &gfp);
@@ -398,8 +399,7 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 	double* coulomb_integral_table = aligned_calloc(num_table_entries * sizeof(coulomb_integral_table[0]));
 	for (glong i = 0; i < num_table_entries; ++i)
 	{
-		// note: using 'long double' square root
-		coulomb_integral_table[i] = gaussian_coulomb_integral_3d(sqrt2_3, sqrtl(i) / 3);
+		coulomb_integral_table[i] = (double)gaussian_coulomb_integral_3d(sqrt2_3, sqrtl(i) / 3);
 	}
 
 	// copy grid information
