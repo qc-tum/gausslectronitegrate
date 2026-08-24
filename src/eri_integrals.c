@@ -154,12 +154,12 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
-	double center_diff[3];
+	glong center_diff_6[3];
 	const double* products[3];
 	union cartesian_grid_point_3d istart, num;
 	for (int i = 0; i < 3; ++i)
 	{
-		center_diff[i] = 0.5 * ((points[0].c[i] + points[1].c[i]) - (points[2].c[i] + points[3].c[i]));
+		center_diff_6[i] = 3 * ((points[0].c[i] + points[1].c[i]) - (points[2].c[i] + points[3].c[i]));
 		const glong ishift01  = (points[0].c[i] - points[1].c[i]) - gfp.shifts.istart;
 		const glong ishift23  = (points[2].c[i] - points[3].c[i]) - gfp.shifts.istart;
 		assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
@@ -171,14 +171,14 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 	}
 
 	double val = 0;
-	double pt[3];
+	glong pt_6_sq[3];
 	for (glong sx = 0; sx < num.x; ++sx)
 	{
 		if (fabs(products[0][sx]) <= tol) {
 			continue;
 		}
 
-		pt[0] = center_diff[0] + (istart.x + sx) / 6.0;
+		pt_6_sq[0] = lsquare(center_diff_6[0] + (istart.x + sx));
 
 		for (glong sy = 0; sy < num.y; ++sy)
 		{
@@ -186,7 +186,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 				continue;
 			}
 
-			pt[1] = center_diff[1] + (istart.y + sy) / 6.0;
+			pt_6_sq[1] = lsquare(center_diff_6[1] + (istart.y + sy));
 
 			for (glong sz = 0; sz < num.z; ++sz)
 			{
@@ -194,9 +194,10 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 					continue;
 				}
 
-				pt[2] = center_diff[2] + (istart.z + sz) / 6.0;
+				pt_6_sq[2] = lsquare(center_diff_6[2] + (istart.z + sz));
 
-				val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3, vec3_norm(pt));
+				val += products[0][sx] * products[1][sy] * products[2][sz]
+					* gaussian_coulomb_integral_3d(1. / 3, sqrtl(pt_6_sq[0] + pt_6_sq[1] + pt_6_sq[2]) / 6);
 			}
 		}
 	}
@@ -509,21 +510,30 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 
 	const double prefac = cubic_power(M_PI / 9.);
 
+	const glong max_grid_range = lmax(lmax(
+		grid->coord_range[0].num,
+		grid->coord_range[1].num),
+		grid->coord_range[2].num);
+	assert(max_grid_range > 0);
+
 	struct gausslet_factor_products gfp;
 	{
-		const glong max_range = lmax(lmax(
-			grid->coord_range[0].num,
-			grid->coord_range[1].num),
-			grid->coord_range[2].num);
-		assert(max_range > 0);
-
 		// unique shifts
 		const struct range shifts = {
-			.istart = -max_range + 1,
-			.num    = 2 * max_range - 1,
+			.istart = -max_grid_range + 1,
+			.num    = 2 * max_grid_range - 1,
 		};
 
 		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
+	}
+
+	// look-up table for Coulomb integrals
+	const glong num_table_entries = 3 * lsquare(6 * (max_grid_range - 1) + 2 * (gdata->indices.num - 1)) + 1;
+	double* coulomb_integral_table = aligned_calloc(num_table_entries * sizeof(coulomb_integral_table[0]));
+	for (glong i = 0; i < num_table_entries; ++i)
+	{
+		// note: using 'long double' square root
+		coulomb_integral_table[i] = gaussian_coulomb_integral_3d(1. / 3, sqrtl(i) / 6);
 	}
 
 	// copy indices
@@ -558,12 +568,12 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 		linear_index_to_cartesian_grid_point_3d(grid, idx_k, &pt_k);
 		linear_index_to_cartesian_grid_point_3d(grid, idx_l, &pt_l);
 
-		double center_diff[3];
+		glong center_diff_6[3];
 		const double* products[3];
 		union cartesian_grid_point_3d istart, num;
 		for (int i = 0; i < 3; ++i)
 		{
-			center_diff[i] = 0.5 * ((pt_i.c[i] + pt_j.c[i]) - (pt_k.c[i] + pt_l.c[i]));
+			center_diff_6[i] = 3 * ((pt_i.c[i] + pt_j.c[i]) - (pt_k.c[i] + pt_l.c[i]));
 			const glong ishift01  = (pt_i.c[i] - pt_j.c[i]) - gfp.shifts.istart;
 			const glong ishift23  = (pt_k.c[i] - pt_l.c[i]) - gfp.shifts.istart;
 			assert(0 <= ishift01 && ishift01 < gfp.shifts.num);
@@ -575,14 +585,14 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 		}
 
 		double val = 0;
-		double pt[3];
+		glong pt_6_sq[3];
 		for (glong sx = 0; sx < num.x; ++sx)
 		{
 			if (fabs(products[0][sx]) <= tol) {
 				continue;
 			}
 
-			pt[0] = center_diff[0] + (istart.x + sx) / 6.0;
+			pt_6_sq[0] = lsquare(center_diff_6[0] + (istart.x + sx));
 
 			for (glong sy = 0; sy < num.y; ++sy)
 			{
@@ -590,7 +600,7 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 					continue;
 				}
 
-				pt[1] = center_diff[1] + (istart.y + sy) / 6.0;
+				pt_6_sq[1] = lsquare(center_diff_6[1] + (istart.y + sy));
 
 				for (glong sz = 0; sz < num.z; ++sz)
 				{
@@ -598,9 +608,9 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 						continue;
 					}
 
-					pt[2] = center_diff[2] + (istart.z + sz) / 6.0;
+					pt_6_sq[2] = lsquare(center_diff_6[2] + (istart.z + sz));
 
-					val += products[0][sx] * products[1][sy] * products[2][sz] * gaussian_coulomb_integral_3d(1. / 3, vec3_norm(pt));
+					val += products[0][sx] * products[1][sy] * products[2][sz] * coulomb_integral_table[pt_6_sq[0] + pt_6_sq[1] + pt_6_sq[2]];
 				}
 			}
 		}
@@ -609,6 +619,7 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 		eri->integral_values[n] = val;
 	}
 
+	aligned_free(coulomb_integral_table);
 	delete_gausslet_factor_products(&gfp);
 }
 

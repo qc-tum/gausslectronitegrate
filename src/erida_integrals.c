@@ -123,21 +123,21 @@ double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const 
 	struct gausslet_factor_products gfp;
 	compute_gausslet_factor_products(gdata, tol, &gfp);
 
-	const double center_diff[3] = {
-		points[0].x - points[1].x,
-		points[0].y - points[1].y,
-		points[0].z - points[1].z,
+	const glong center_diff_3[3] = {
+		3 * (points[0].x - points[1].x),
+		3 * (points[0].y - points[1].y),
+		3 * (points[0].z - points[1].z),
 	};
 
 	double val = 0;
-	double pt[3];
+	glong pt_3_sq[3];
 	for (glong sx = 0; sx < gfp.indices.num; ++sx)
 	{
 		if (fabs(gfp.products[sx]) <= tol) {
 			continue;
 		}
 
-		pt[0] = center_diff[0] + (gfp.indices.istart + sx) / 3.0;
+		pt_3_sq[0] = lsquare(center_diff_3[0] + (gfp.indices.istart + sx));
 
 		for (glong sy = 0; sy < gfp.indices.num; ++sy)
 		{
@@ -145,7 +145,7 @@ double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const 
 				continue;
 			}
 
-			pt[1] = center_diff[1] + (gfp.indices.istart + sy) / 3.0;
+			pt_3_sq[1] = lsquare(center_diff_3[1] + (gfp.indices.istart + sy));
 
 			for (glong sz = 0; sz < gfp.indices.num; ++sz)
 			{
@@ -153,9 +153,10 @@ double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const 
 					continue;
 				}
 
-				pt[2] = center_diff[2] + (gfp.indices.istart + sz) / 3.0;
+				pt_3_sq[2] = lsquare(center_diff_3[2] + (gfp.indices.istart + sz));
 
-				val += gfp.products[sx] * gfp.products[sy] * gfp.products[sz] * gaussian_coulomb_integral_3d(sqrt2_3, vec3_norm(pt));
+				val += gfp.products[sx] * gfp.products[sy] * gfp.products[sz]
+					* gaussian_coulomb_integral_3d(sqrt2_3, sqrtl(pt_3_sq[0] + pt_3_sq[1] + pt_3_sq[2]) / 3);
 			}
 		}
 	}
@@ -386,6 +387,21 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 	struct gausslet_factor_products gfp;
 	compute_gausslet_factor_products(gdata, tol, &gfp);
 
+	const glong max_grid_range = lmax(lmax(
+		grid->coord_range[0].num,
+		grid->coord_range[1].num),
+		grid->coord_range[2].num);
+	assert(max_grid_range > 0);
+
+	// look-up table for Coulomb integrals
+	const glong num_table_entries = 3 * lsquare(3 * (max_grid_range - 1) + (gdata->indices.num - 1)) + 1;
+	double* coulomb_integral_table = aligned_calloc(num_table_entries * sizeof(coulomb_integral_table[0]));
+	for (glong i = 0; i < num_table_entries; ++i)
+	{
+		// note: using 'long double' square root
+		coulomb_integral_table[i] = gaussian_coulomb_integral_3d(sqrt2_3, sqrtl(i) / 3);
+	}
+
 	// copy grid information
 	erida->grid = *grid;
 
@@ -415,21 +431,21 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 		linear_index_to_cartesian_grid_point_3d(grid, idx_i, &pt_i);
 		linear_index_to_cartesian_grid_point_3d(grid, idx_j, &pt_j);
 
-		const double center_diff[3] = {
-			pt_i.x - pt_j.x,
-			pt_i.y - pt_j.y,
-			pt_i.z - pt_j.z,
+		const glong center_diff_3[3] = {
+			3 * (pt_i.x - pt_j.x),
+			3 * (pt_i.y - pt_j.y),
+			3 * (pt_i.z - pt_j.z),
 		};
 
 		double val = 0;
-		double pt[3];
+		glong pt_3_sq[3];
 		for (glong sx = 0; sx < gfp.indices.num; ++sx)
 		{
 			if (fabs(gfp.products[sx]) <= tol) {
 				continue;
 			}
 
-			pt[0] = center_diff[0] + (gfp.indices.istart + sx) / 3.0;
+			pt_3_sq[0] = lsquare(center_diff_3[0] + (gfp.indices.istart + sx));
 
 			for (glong sy = 0; sy < gfp.indices.num; ++sy)
 			{
@@ -437,7 +453,7 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 					continue;
 				}
 
-				pt[1] = center_diff[1] + (gfp.indices.istart + sy) / 3.0;
+				pt_3_sq[1] = lsquare(center_diff_3[1] + (gfp.indices.istart + sy));
 
 				for (glong sz = 0; sz < gfp.indices.num; ++sz)
 				{
@@ -445,9 +461,9 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 						continue;
 					}
 
-					pt[2] = center_diff[2] + (gfp.indices.istart + sz) / 3.0;
+					pt_3_sq[2] = lsquare(center_diff_3[2] + (gfp.indices.istart + sz));
 
-					val += gfp.products[sx] * gfp.products[sy] * gfp.products[sz] * gaussian_coulomb_integral_3d(sqrt2_3, vec3_norm(pt));
+					val += gfp.products[sx] * gfp.products[sy] * gfp.products[sz] * coulomb_integral_table[pt_3_sq[0] + pt_3_sq[1] + pt_3_sq[2]];
 				}
 			}
 		}
@@ -455,6 +471,7 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 		erida->integral_values[n] = val;
 	}
 
+	aligned_free(coulomb_integral_table);
 	delete_gausslet_factor_products(&gfp);
 }
 

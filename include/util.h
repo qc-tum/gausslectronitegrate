@@ -24,6 +24,16 @@ static inline double square(const double x)
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Square function x -> x^2 for a long integer.
+///
+static inline glong lsquare(const glong x)
+{
+	return x * x;
+}
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Cubic power x -> x^3.
 ///
 static inline double cubic_power(const double x)
