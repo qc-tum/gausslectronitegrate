@@ -30,7 +30,7 @@ static long double gaussian_coulomb_integral_3d(const long double w, const long 
 ///
 /// \brief Temporary structure storing pre-computed products of Gausslet factors.
 ///
-struct gausslet_factor_products
+struct erida_gausslet_factor_products
 {
 	double* products;      //!< product values
 	struct range indices;  //!< logical indices
@@ -41,7 +41,7 @@ struct gausslet_factor_products
 ///
 /// \brief Pre-compute products of Gausslet factors for evaluating electron repulsion integrals using the integral diagonal approximation (ERIDA).
 ///
-static void compute_gausslet_factor_products(const struct gausslet_data* gdata, const double tol, struct gausslet_factor_products* gfp)
+static void compute_erida_gausslet_factor_products(const struct gausslet_data* gdata, const double tol, struct erida_gausslet_factor_products* gfp)
 {
 	// initialize with zero (for the case that all products are filtered out based on the tolerance)
 	gfp->indices.istart = 0;
@@ -104,7 +104,7 @@ static void compute_gausslet_factor_products(const struct gausslet_data* gdata, 
 ///
 /// \brief Delete pre-computed products of Gausslet factors structure (free memory).
 ///
-static void delete_gausslet_factor_products(struct gausslet_factor_products* gfp)
+static void delete_erida_gausslet_factor_products(struct erida_gausslet_factor_products* gfp)
 {
 	if (gfp->products != NULL) {
 		aligned_free(gfp->products);
@@ -121,8 +121,8 @@ double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const 
 	// sqrt(2) / 3
 	const long double sqrt2_3 = 0.4714045207910316829338962414032327L;
 
-	struct gausslet_factor_products gfp;
-	compute_gausslet_factor_products(gdata, tol, &gfp);
+	struct erida_gausslet_factor_products gfp;
+	compute_erida_gausslet_factor_products(gdata, tol, &gfp);
 
 	const glong center_diff_3[3] = {
 		3 * (points[0].x - points[1].x),
@@ -162,7 +162,7 @@ double compute_erida_gausslet_integral(const struct gausslet_data* gdata, const 
 		}
 	}
 
-	delete_gausslet_factor_products(&gfp);
+	delete_erida_gausslet_factor_products(&gfp);
 
 	return val;
 }
@@ -385,8 +385,8 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 	// sqrt(2) / 3
 	const long double sqrt2_3 = 0.4714045207910316829338962414032327L;
 
-	struct gausslet_factor_products gfp;
-	compute_gausslet_factor_products(gdata, tol, &gfp);
+	struct erida_gausslet_factor_products gfp;
+	compute_erida_gausslet_factor_products(gdata, tol, &gfp);
 
 	const glong max_grid_range = lmax(lmax(
 		grid->coord_range[0].num,
@@ -472,7 +472,7 @@ void compute_sparse_erida_gausslet_integrals(const struct gausslet_data* gdata,
 	}
 
 	aligned_free(coulomb_integral_table);
-	delete_gausslet_factor_products(&gfp);
+	delete_erida_gausslet_factor_products(&gfp);
 }
 
 

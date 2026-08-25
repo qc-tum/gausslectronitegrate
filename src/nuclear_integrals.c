@@ -32,8 +32,6 @@ double compute_nuclear_gausslet_integral(
 	const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[2],
 	const struct atomic_nucleus* nuclei, const int num_nuclei, const double tol)
 {
-	const double prefac = cubic_power(sqrt(M_PI) / 3.);
-
 	struct gausslet_factors gf;
 	{
 		const glong max_range = lmax(lmax(
@@ -121,7 +119,6 @@ double compute_nuclear_gausslet_integral(
 			}
 		}
 	}
-	val *= prefac;
 
 	delete_gausslet_factors(&gf);
 
@@ -144,8 +141,6 @@ void compute_nuclear_gausslet_integrals(
 	ngi->nuclei = aligned_malloc(num_nuclei * sizeof(ngi->nuclei[0]));
 	memcpy(ngi->nuclei, nuclei, num_nuclei * sizeof(ngi->nuclei[0]));
 	ngi->num_nuclei = num_nuclei;
-
-	const double prefac = cubic_power(sqrt(M_PI) / 3.);
 
 	struct gausslet_factors gf;
 	{
@@ -250,7 +245,6 @@ void compute_nuclear_gausslet_integrals(
 									}
 								}
 							}
-							val *= prefac;
 
 							ngi->integral_values[idx_i * num_points + idx_j] = val;
 						}

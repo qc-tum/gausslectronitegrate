@@ -12,6 +12,7 @@ def _nuclear_gausslet_factors(gauss_coeffs, coeff_indices, shifts):
     for evaluating nuclear overlap integrals.
     """
     assert len(gauss_coeffs) == len(coeff_indices)
+    prefac = np.sqrt(np.pi) / 3
     factor_indices = list(range(2*min(coeff_indices), 2*max(coeff_indices) + 1))
     # dictionary indexed by a "shift"
     factors = {}
@@ -21,7 +22,7 @@ def _nuclear_gausslet_factors(gauss_coeffs, coeff_indices, shifts):
         for a, coeff_a in zip(coeff_indices, gauss_coeffs):
             for b, coeff_b in zip(coeff_indices, gauss_coeffs):
                 idx = factor_indices.index(a + b)
-                fact[idx] += coeff_a * coeff_b * np.exp(-(0.5 * (3*shift + (a - b)))**2)
+                fact[idx] += prefac * coeff_a * coeff_b * np.exp(-(0.5 * (3*shift + (a - b)))**2)
         factors[shift] = fact
     return factors, factor_indices
 
@@ -32,7 +33,6 @@ def nuclear_gausslet_integrals(gauss_coeffs, coeff_indices, centers_list,
     Evaluate the nuclear overlap integrals for two Gausslet orbitals
     with coordinates at integer `centers`.
     """
-    prefac = (np.sqrt(np.pi) / 3)**3
     # unique shifts
     shifts = list({
         centers[0][n] - centers[1][n]
@@ -48,7 +48,7 @@ def nuclear_gausslet_integrals(gauss_coeffs, coeff_indices, centers_list,
         idx = [np.where(np.abs(factor[n]) > tol)[0] for n in range(3)]
         factor = [factor[n][idx[n]] for n in range(3)]
         indices = [[factor_indices[i] for i in idx[n]] for n in range(3)]
-        overlaps[centers] = prefac * sum(
+        overlaps[centers] = sum(
             d0 * d1 * d2 *
             gaussian_nuclear_integral_3d(1. / 3, np.linalg.norm(
                 0.5 * np.array([

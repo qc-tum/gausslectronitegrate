@@ -12,15 +12,17 @@ def _eri_gausslet_factors(gauss_coeffs, coeff_indices, shifts):
     for evaluating electron repulsion integrals.
     """
     assert len(gauss_coeffs) == len(coeff_indices)
+    prefac = np.sqrt(np.pi) / 3
     factor_indices = list(range(2*min(coeff_indices), 2*max(coeff_indices) + 1))
     # dictionary indexed by a "shift"
     factors = {}
     for shift in shifts:
+        assert isinstance(shift, int)
         fact = np.zeros(len(factor_indices))
         for a, coeff_a in zip(coeff_indices, gauss_coeffs):
             for b, coeff_b in zip(coeff_indices, gauss_coeffs):
                 idx = factor_indices.index(a + b)
-                fact[idx] += coeff_a * coeff_b * np.exp(-(0.5 * (3*shift + (a - b)))**2)
+                fact[idx] += prefac * coeff_a * coeff_b * np.exp(-(0.5 * (3*shift + (a - b)))**2)
         factors[shift] = fact
     return factors, factor_indices
 
@@ -53,7 +55,6 @@ def eri_gausslet_integrals(gauss_coeffs, coeff_indices, centers_list, tol: float
     Evaluate the electron repulsion integrals for Gausslet orbitals
     with coordinates at integer `centers`.
     """
-    prefac = (np.pi / 9)**3
     # unique pair shifts
     pair_shifts = list({
         (centers[0][n] - centers[1][n],
@@ -74,7 +75,7 @@ def eri_gausslet_integrals(gauss_coeffs, coeff_indices, centers_list, tol: float
         idx = [np.where(np.abs(product[n]) > tol)[0] for n in range(3)]
         product = [product[n][idx[n]] for n in range(3)]
         indices = [[product_indices[i] for i in idx[n]] for n in range(3)]
-        overlaps[centers] = prefac * sum(
+        overlaps[centers] = sum(
             d0 * d1 * d2 *
             gaussian_coulomb_integral_3d(1. / 3, np.linalg.norm(0.5 * np.array([
                 (centers[0][0] + centers[1][0]) - (centers[2][0] + centers[3][0]) + i0 / 3.,

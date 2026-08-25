@@ -31,7 +31,7 @@ static long double gaussian_coulomb_integral_3d(const long double w, const long 
 ///
 /// \brief Temporary structure storing pre-computed products of Gausslet factors.
 ///
-struct gausslet_factor_products
+struct eri_gausslet_factor_products
 {
 	double** products;      //!< products[i * shifts.num + j] stores the products for shift index pair '(i, j)'
 	struct range* indices;  //!< logical indices, for each shift pair
@@ -43,7 +43,7 @@ struct gausslet_factor_products
 ///
 /// \brief Pre-compute products of Gausslet factors for evaluating electron repulsion integrals.
 ///
-static void compute_gausslet_factor_products(const struct gausslet_data* gdata, const struct range* shifts, const double tol, struct gausslet_factor_products* gfp)
+static void compute_eri_gausslet_factor_products(const struct gausslet_data* gdata, const struct range* shifts, const double tol, struct eri_gausslet_factor_products* gfp)
 {
 	assert(shifts->num > 0);
 
@@ -114,7 +114,7 @@ static void compute_gausslet_factor_products(const struct gausslet_data* gdata, 
 ///
 /// \brief Delete pre-computed products of Gausslet factors structure (free memory).
 ///
-static void delete_gausslet_factor_products(struct gausslet_factor_products* gfp)
+static void delete_eri_gausslet_factor_products(struct eri_gausslet_factor_products* gfp)
 {
 	for (glong i = 0; i < gfp->shifts.num * gfp->shifts.num; ++i) {
 		if (gfp->products[i] != NULL) {
@@ -132,9 +132,7 @@ static void delete_gausslet_factor_products(struct gausslet_factor_products* gfp
 ///
 double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const union cartesian_grid_point_3d points[4], const double tol)
 {
-	const double prefac = cubic_power(M_PI / 9.);
-
-	struct gausslet_factor_products gfp;
+	struct eri_gausslet_factor_products gfp;
 	{
 		const glong max_range_01 = lmax(lmax(
 			labs(points[0].x - points[1].x),
@@ -152,7 +150,7 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 			.num    = 2 * max_range - 1,
 		};
 
-		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
+		compute_eri_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
 	glong center_diff_6[3];
@@ -202,9 +200,8 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 			}
 		}
 	}
-	val *= prefac;
 
-	delete_gausslet_factor_products(&gfp);
+	delete_eri_gausslet_factor_products(&gfp);
 
 	return val;
 }
@@ -509,15 +506,13 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 	// copy grid information
 	eri->grid = *grid;
 
-	const double prefac = cubic_power(M_PI / 9.);
-
 	const glong max_grid_range = lmax(lmax(
 		grid->coord_range[0].num,
 		grid->coord_range[1].num),
 		grid->coord_range[2].num);
 	assert(max_grid_range > 0);
 
-	struct gausslet_factor_products gfp;
+	struct eri_gausslet_factor_products gfp;
 	{
 		// unique shifts
 		const struct range shifts = {
@@ -525,7 +520,7 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 			.num    = 2 * max_grid_range - 1,
 		};
 
-		compute_gausslet_factor_products(gdata, &shifts, tol, &gfp);
+		compute_eri_gausslet_factor_products(gdata, &shifts, tol, &gfp);
 	}
 
 	// look-up table for Coulomb integrals
@@ -614,13 +609,12 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 				}
 			}
 		}
-		val *= prefac;
 
 		eri->integral_values[n] = val;
 	}
 
 	aligned_free(coulomb_integral_table);
-	delete_gausslet_factor_products(&gfp);
+	delete_eri_gausslet_factor_products(&gfp);
 }
 
 

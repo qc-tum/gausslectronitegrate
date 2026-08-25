@@ -25,6 +25,9 @@ void compute_gausslet_factors(const struct gausslet_data* gdata, const struct ra
 	gf->factors = aligned_calloc(gf->shifts.num * sizeof(gf->factors[0]));
 	gf->indices = aligned_calloc(gf->shifts.num * sizeof(gf->indices[0]));
 
+	// sqrt(pi) / 3
+	const double prefac = 0.590817950301838675766;
+
 	for (glong k = 0; k < gf->shifts.num; ++k)
 	{
 		const glong shift = gf->shifts.istart + k;
@@ -42,7 +45,7 @@ void compute_gausslet_factors(const struct gausslet_data* gdata, const struct ra
 				// using that all_indices.istart == 2 * gdata->indices.istart
 				const glong idx = i + j;
 				assert(idx < all_indices.num);
-				all_factors[idx] += coeff_a * coeff_b * exp(-square(0.5 * (3 * shift + (i - j))));
+				all_factors[idx] += prefac * coeff_a * coeff_b * exp(-square(0.5 * (3 * shift + (i - j))));
 			}
 		}
 
