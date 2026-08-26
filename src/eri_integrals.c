@@ -214,7 +214,9 @@ double compute_eri_gausslet_integral(const struct gausslet_data* gdata, const un
 			if (fabs(products[2][sz]) <= tol) {
 				continue;
 			}
+
 			const glong sq_z = lsquare(center_diff_6[2] + (istart.z + sz));
+
 			t += products[2][sz] * coulomb_integral_table[rho + sq_z];
 		}
 		t *= circular_products[rho];
@@ -639,7 +641,9 @@ void compute_sparse_eri_gausslet_integrals(const struct gausslet_data* gdata,
 				if (fabs(products[2][sz]) <= tol) {
 					continue;
 				}
+
 				const glong sq_z = lsquare(center_diff_6[2] + (istart.z + sz));
+
 				t += products[2][sz] * coulomb_integral_table[rho + sq_z];
 			}
 			t *= circular_products[rho];

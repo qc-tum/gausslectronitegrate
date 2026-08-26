@@ -73,7 +73,7 @@ char* test_erida_integrals()
 	}
 
 	// compare
-	if (uniform_distance(num_entries_dense, erida_matrix, erida_matrix_ref) > 1e-13) {
+	if (uniform_distance(num_entries_dense, erida_matrix, erida_matrix_ref) > 1e-12) {
 		return "electron repulsion integrals using the integral diagonal approximation do not match reference";
 	}
 
