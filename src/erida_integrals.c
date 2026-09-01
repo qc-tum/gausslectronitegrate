@@ -322,7 +322,7 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 			// exploit translational invariance
 			{
 				// x-coordinate of orbital box center times 2
-				const glong center_x = 2 * grid->coord_range[0].istart + lmin(icx, jcx) + lmax(icx, jcx);
+				const glong center_x = 2 * grid->coord_range[0].istart + icx + jcx;
 				if (center_x < -1 || 1 < center_x) {
 					continue;
 				}
@@ -335,7 +335,7 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 					// exploit translational invariance
 					{
 						// y-coordinate of orbital box center times 2
-						const glong center_y = 2 * grid->coord_range[1].istart + lmin(icy, jcy) + lmax(icy, jcy);
+						const glong center_y = 2 * grid->coord_range[1].istart + icy + jcy;
 						if (center_y < -1 || 1 < center_y) {
 							continue;
 						}
@@ -348,7 +348,7 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 							// exploit translational invariance
 							{
 								// z-coordinate of orbital box center times 2
-								const glong center_z = 2 * grid->coord_range[2].istart + lmin(icz, jcz) + lmax(icz, jcz);
+								const glong center_z = 2 * grid->coord_range[2].istart + icz + jcz;
 								if (center_z < -1 || 1 < center_z) {
 									continue;
 								}
@@ -578,7 +578,7 @@ void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_
 		for (glong jcx = 0; jcx < erida->grid.coord_range[0].num; ++jcx)
 		{
 			// x-coordinate of orbital box center times 2
-			const glong center_x = 2 * erida->grid.coord_range[0].istart + lmin(icx, jcx) + lmax(icx, jcx);
+			const glong center_x = 2 * erida->grid.coord_range[0].istart + icx + jcx;
 			const glong trans_x = center_x / 2;
 			assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
 
@@ -587,7 +587,7 @@ void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_
 				for (glong jcy = 0; jcy < erida->grid.coord_range[1].num; ++jcy)
 				{
 					// y-coordinate of orbital box center times 2
-					const glong center_y = 2 * erida->grid.coord_range[1].istart + lmin(icy, jcy) + lmax(icy, jcy);
+					const glong center_y = 2 * erida->grid.coord_range[1].istart + icy + jcy;
 					const glong trans_y = center_y / 2;
 					assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
 
@@ -596,7 +596,7 @@ void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_
 						for (glong jcz = 0; jcz < erida->grid.coord_range[2].num; ++jcz)
 						{
 							// z-coordinate of orbital box center times 2
-							const glong center_z = 2 * erida->grid.coord_range[2].istart + lmin(icz, jcz) + lmax(icz, jcz);
+							const glong center_z = 2 * erida->grid.coord_range[2].istart + icz + jcz;
 							const glong trans_z = center_z / 2;
 							assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
 
@@ -663,7 +663,7 @@ void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida
 		for (glong jcx = 0; jcx < grid_dense->coord_range[0].num; ++jcx)
 		{
 			// x-coordinate of orbital box center times 2
-			const glong center_x = 2 * grid_dense->coord_range[0].istart + lmin(icx, jcx) + lmax(icx, jcx);
+			const glong center_x = 2 * grid_dense->coord_range[0].istart + icx + jcx;
 			const glong trans_x = center_x / 2;
 			assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
 
@@ -672,7 +672,7 @@ void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida
 				for (glong jcy = 0; jcy < grid_dense->coord_range[1].num; ++jcy)
 				{
 					// y-coordinate of orbital box center times 2
-					const glong center_y = 2 * grid_dense->coord_range[1].istart + lmin(icy, jcy) + lmax(icy, jcy);
+					const glong center_y = 2 * grid_dense->coord_range[1].istart + icy + jcy;
 					const glong trans_y = center_y / 2;
 					assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
 
@@ -681,7 +681,7 @@ void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida
 						for (glong jcz = 0; jcz < grid_dense->coord_range[2].num; ++jcz)
 						{
 							// z-coordinate of orbital box center times 2
-							const glong center_z = 2 * grid_dense->coord_range[2].istart + lmin(icz, jcz) + lmax(icz, jcz);
+							const glong center_z = 2 * grid_dense->coord_range[2].istart + icz + jcz;
 							const glong trans_z = center_z / 2;
 							assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
 
