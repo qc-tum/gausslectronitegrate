@@ -3,14 +3,14 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
-#include "eri_integrals.h"
+#include "erida_integrals.h"
 #include "aligned_memory.h"
 #include "timing.h"
 
 
 int main(int argc, char* argv[])
 {
-	const char* syntax = "gli_eri_symmetry_reduction <max grid length>";
+	const char* syntax = "gli_erida_symmetry_reduction <max grid length>";
 
 	// parse command line arguments
 	if (argc != 2)
@@ -34,8 +34,8 @@ int main(int argc, char* argv[])
 	// get the tick resolution
 	const double ticks_per_sec = (double)get_tick_resolution();
 
-	printf("Enumerating symmetry-reduced electron repulsion integral (ERI) indices...\n");
-	printf("grid dim   # points       # dense ERI   # symm. ERI  reduction     wall time [seconds]\n");
+	printf("Enumerating symmetry-reduced electron repulsion integral (ERIDA) indices...\n");
+	printf("grid dim   # points  # dense ERIDA  # symm. ERIDA  reduction     wall time [seconds]\n");
 
 	for (glong grid_length = 1; grid_length <= max_grid_length; grid_length += 2)
 	{
@@ -50,23 +50,23 @@ int main(int argc, char* argv[])
 		const glong num_points = cartesian_grid_3d_num_points(&grid);
 
 		const uint64_t tick_start = get_time_ticks();
-		struct sparse_eri_indices eri_indices;
-		enumerate_symmetry_reduced_eri_indices(&grid, &eri_indices);
+		struct sparse_erida_indices erida_indices;
+		enumerate_symmetry_reduced_erida_indices(&grid, &erida_indices);
 		const uint64_t tick_end = get_time_ticks();
 
 		const double time = (tick_end - tick_start) / ticks_per_sec;
-		const glong num_eri_dense = num_points * num_points * num_points * num_points;
+		const glong num_erida_dense = num_points * num_points;
 		printf(grid_length < 10 ?
-				"%li x %li x %li     %5li  %16li  %12li  %-12g  %10g\n" :
-				"%li x %li x %li  %5li  %16li  %12li  %-12g  %10g\n",
+				"%li x %li x %li     %5li  %13li  %13li  %-12g  %10g\n" :
+				"%li x %li x %li  %5li  %13li  %13li  %-12g  %10g\n",
 			grid.coord_range[0].num, grid.coord_range[1].num, grid.coord_range[2].num,
 			num_points,
-			num_eri_dense,
-			eri_indices.num,
-			(double)eri_indices.num / num_eri_dense,
+			num_erida_dense,
+			erida_indices.num,
+			(double)erida_indices.num / num_erida_dense,
 			time);
 
-		delete_sparse_eri_indices(&eri_indices);
+		delete_sparse_erida_indices(&erida_indices);
 	}
 
 	printf("Done.\n");
