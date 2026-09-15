@@ -2,7 +2,7 @@ import numpy as np
 import h5py
 import sys
 sys.path.append("../gausslets/")
-from gausslet_coefficients import get_gausslet_g10_coeffs
+from gausslets import get_gausslet_g10_coeffs
 from eri_integrals import eri_gausslet_integrals
 
 

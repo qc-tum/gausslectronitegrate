@@ -5,6 +5,32 @@ Evaluate Gausslet coefficients.
 import numpy as np
 
 
+def elementary_gaussian(x: float, j: int) -> float:
+    """
+    Evaluate an elementary Gaussian.
+    """
+    return np.exp(-0.5 * (3*x - j)**2)
+
+
+def evaluate_gausslet_1d(b_list, j_list, x):
+    """
+    Evaluate a Gausslet function defined via the
+    provided coefficients and indices in one dimension.
+    """
+    return sum(b * elementary_gaussian(x, j) for b, j in zip(b_list, j_list))
+
+
+def evaluate_gausslet_3d(b_list, j_list, r):
+    """
+    Evaluate a Gausslet function defined via the
+    provided coefficients and indices in three dimensions.
+    """
+    x, y, z = r
+    return evaluate_gausslet_1d(b_list, j_list, x) \
+         * evaluate_gausslet_1d(b_list, j_list, y) \
+         * evaluate_gausslet_1d(b_list, j_list, z)
+
+
 def get_gausslet_g10_coeffs():
     """
     Coefficients `b_j` of the Gaussians defining the Gausslet G10
