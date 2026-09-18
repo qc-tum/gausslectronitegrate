@@ -1,5 +1,6 @@
 """
-Ground state energy and wavefunction of the hydrogen atom based on Gausslet orbital discretization.
+Ground state energy and wavefunction of the hydrogen atom
+based on Gausslet orbital discretization.
 """
 
 import numpy as np
@@ -9,16 +10,16 @@ sys.path.append("../gausslets/")
 from gausslets import evaluate_gausslet_3d
 
 
-def hydrogen_atom_groundstate_gausslets(gausslet_coeffs, grid_length, scaling_list, tol_nuc=1e-5):
+def hydrogen_atom_groundstate_gausslets(gausslet_coeffs, grid_dim, scaling_list, tol_nuc=1e-5):
     """
-    Compute the ground state energies and wavefunctions based on a Gausslet
-    orbital discretization on the specified grid and scaling factors.
+    Compute the ground state energy and wavefunction of the hydrogen atom
+    based on a Gausslet orbital discretization on the specified grid with various scaling factors.
 
     Args:
         gausslet_coeffs: Gausslet coefficients
-        grid_length:     size length of the grid (odd positive integer); the overall grid
-                         has dimension grid_length x grid_length x grid_length and
-                         is centered at the origin
+        grid_dim:        dimension of the grid along one coordinate axis (odd positive integer);
+                         the overall grid has dimension grid_dim x grid_dim x grid_dim
+                         and is centered at the origin
         scaling_list:    list of grid scaling factors
         tol_nuc:         truncation tolerance for the nuclear overlap integrals
                          (values close to zero imply higher accuracy but longer computation time)
@@ -27,20 +28,19 @@ def hydrogen_atom_groundstate_gausslets(gausslet_coeffs, grid_length, scaling_li
         tuple: tuple containing
           - en0_list:  list of ground state energies for each scaling factor
           - psi0_list: list of corresponding eigenstates
-
     """
-    assert isinstance(grid_length, int)
-    assert grid_length % 2 == 1
+    assert isinstance(grid_dim, int)
+    assert grid_dim % 2 == 1
     grid = [
-        (-(grid_length - 1) // 2, grid_length),  # x
-        (-(grid_length - 1) // 2, grid_length),  # y
-        (-(grid_length - 1) // 2, grid_length),  # z
+        (-(grid_dim - 1) // 2, grid_dim),  # x
+        (-(grid_dim - 1) // 2, grid_dim),  # y
+        (-(grid_dim - 1) // 2, grid_dim),  # z
     ]
 
     # kinetic overlap integrals
     kgi = gli.compute_kinetic_gausslet_integrals(gausslet_coeffs, grid)
     # nuclear overlap integrals (for a nucleus at the origin with charge 1)
-    ngi  = gli.compute_nuclear_gausslet_integrals(gausslet_coeffs, grid, [(0, 0, 0)], [1], tol_nuc)
+    ngi = gli.compute_nuclear_gausslet_integrals(gausslet_coeffs, grid, [(0, 0, 0)], [1], tol_nuc)
 
     en0_list  = []
     psi0_list = []
