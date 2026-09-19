@@ -10,15 +10,15 @@ sys.path.append("../gausslets/")
 from gausslets import evaluate_gausslet_3d
 
 
-def hydrogen_atom_groundstate_gausslets(gausslet_coeffs, grid_dim, scaling_list, tol_nuc=1e-5):
+def hydrogen_atom_groundstate_gausslets(gausslet_coeffs, grid_length, scaling_list, tol_nuc=1e-5):
     """
     Compute the ground state energy and wavefunction of the hydrogen atom
     based on a Gausslet orbital discretization on the specified grid with various scaling factors.
 
     Args:
         gausslet_coeffs: Gausslet coefficients
-        grid_dim:        dimension of the grid along one coordinate axis (odd positive integer);
-                         the overall grid has dimension grid_dim x grid_dim x grid_dim
+        grid_length:     length of the grid along one coordinate axis (odd positive integer);
+                         the overall grid has dimension grid_length x grid_length x grid_length
                          and is centered at the origin
         scaling_list:    list of grid scaling factors
         tol_nuc:         truncation tolerance for the nuclear overlap integrals
@@ -29,12 +29,12 @@ def hydrogen_atom_groundstate_gausslets(gausslet_coeffs, grid_dim, scaling_list,
           - en0_list:  list of ground state energies for each scaling factor
           - psi0_list: list of corresponding eigenstates
     """
-    assert isinstance(grid_dim, int)
-    assert grid_dim % 2 == 1
+    assert isinstance(grid_length, int)
+    assert grid_length % 2 == 1
     grid = [
-        (-(grid_dim - 1) // 2, grid_dim),  # x
-        (-(grid_dim - 1) // 2, grid_dim),  # y
-        (-(grid_dim - 1) // 2, grid_dim),  # z
+        (-(grid_length - 1) // 2, grid_length),  # x
+        (-(grid_length - 1) // 2, grid_length),  # y
+        (-(grid_length - 1) // 2, grid_length),  # z
     ]
 
     # kinetic overlap integrals
