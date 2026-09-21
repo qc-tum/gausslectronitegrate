@@ -911,6 +911,125 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_spars
 
 //________________________________________________________________________________________________________________________
 ///
+/// \brief Apply the electron repulsion integral (ERI) tensor interpreted as a matrix in physicist's convention to a list of states.
+///
+void apply_sparse_eri_tensor(const struct sparse_eri_gausslet_integrals* eri, const double* restrict states, const glong num_states, double* restrict ret)
+{
+	const glong num_points = cartesian_grid_3d_num_points(&eri->grid);
+	assert(num_points > 0);
+
+	glong* octahedral_perm[48];
+	evaluate_octahedral_grid_permutations(&eri->grid, octahedral_perm);
+
+	const glong dim_state = num_points * num_points;
+
+	memset(ret, 0, dim_state * num_states * sizeof(ret[0]));
+
+	// re-ordering j <-> k loops, and parallelizing only outer two i, k loops to avoid race conditions
+	#pragma omp parallel for collapse(2)
+	for (glong icx = 0; icx < eri->grid.coord_range[0].num; ++icx)
+	{
+		for (glong kcx = 0; kcx < eri->grid.coord_range[0].num; ++kcx)
+		{
+			for (glong jcx = 0; jcx < eri->grid.coord_range[0].num; ++jcx)
+			{
+				for (glong lcx = 0; lcx < eri->grid.coord_range[0].num; ++lcx)
+				{
+					// x-coordinate of orbital box center times 2
+					const glong center_x = 2 * eri->grid.coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
+					                                                             lmax(lmax(lmax(icx, jcx), kcx), lcx);
+					const glong trans_x = center_x / 2;
+					assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+
+					for (glong icy = 0; icy < eri->grid.coord_range[1].num; ++icy)
+					{
+						for (glong kcy = 0; kcy < eri->grid.coord_range[1].num; ++kcy)
+						{
+							for (glong jcy = 0; jcy < eri->grid.coord_range[1].num; ++jcy)
+							{
+								for (glong lcy = 0; lcy < eri->grid.coord_range[1].num; ++lcy)
+								{
+									// y-coordinate of orbital box center times 2
+									const glong center_y = 2 * eri->grid.coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
+									                                                             lmax(lmax(lmax(icy, jcy), kcy), lcy);
+									const glong trans_y = center_y / 2;
+									assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+
+									for (glong icz = 0; icz < eri->grid.coord_range[2].num; ++icz)
+									{
+										for (glong kcz = 0; kcz < eri->grid.coord_range[2].num; ++kcz)
+										{
+											for (glong jcz = 0; jcz < eri->grid.coord_range[2].num; ++jcz)
+											{
+												for (glong lcz = 0; lcz < eri->grid.coord_range[2].num; ++lcz)
+												{
+													// z-coordinate of orbital box center times 2
+													const glong center_z = 2 * eri->grid.coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
+													                                                             lmax(lmax(lmax(icz, jcz), kcz), lcz);
+													const glong trans_z = center_z / 2;
+													assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+
+													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx, icy, icz);
+													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx, jcy, jcz);
+													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx, kcy, kcz);
+													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx, lcy, lcz);
+													// group (i, k) and (j, l) in accordance with physicist's convention
+													const glong idx_ik = idx_i * num_points + idx_k;
+													const glong idx_jl = idx_j * num_points + idx_l;
+
+													const union cartesian_grid_point_3d pt_i_p = {
+														.x = eri->grid.coord_range[0].istart + icx - trans_x,
+														.y = eri->grid.coord_range[1].istart + icy - trans_y,
+														.z = eri->grid.coord_range[2].istart + icz - trans_z,
+													};
+													const union cartesian_grid_point_3d pt_j_p = {
+														.x = eri->grid.coord_range[0].istart + jcx - trans_x,
+														.y = eri->grid.coord_range[1].istart + jcy - trans_y,
+														.z = eri->grid.coord_range[2].istart + jcz - trans_z,
+													};
+													const union cartesian_grid_point_3d pt_k_p = {
+														.x = eri->grid.coord_range[0].istart + kcx - trans_x,
+														.y = eri->grid.coord_range[1].istart + kcy - trans_y,
+														.z = eri->grid.coord_range[2].istart + kcz - trans_z,
+													};
+													const union cartesian_grid_point_3d pt_l_p = {
+														.x = eri->grid.coord_range[0].istart + lcx - trans_x,
+														.y = eri->grid.coord_range[1].istart + lcy - trans_y,
+														.z = eri->grid.coord_range[2].istart + lcz - trans_z,
+													};
+													const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_i_p);
+													const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_j_p);
+													const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_k_p);
+													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_l_p);
+													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
+
+													const double val = sparse_eri_gausslet_integrals_get_value(eri, idx_tensor_sparse);
+
+													for (glong s = 0; s < num_states; ++s)
+													{
+														ret[idx_ik * num_states + s] += val * states[idx_jl * num_states + s];
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < 48; ++i) {
+		aligned_free(octahedral_perm[i]);
+	}
+}
+
+
+//________________________________________________________________________________________________________________________
+///
 /// \brief Delete the sparse electron repulsion integral storage structure (free memory).
 ///
 void delete_sparse_eri_gausslet_integrals(struct sparse_eri_gausslet_integrals* eri)

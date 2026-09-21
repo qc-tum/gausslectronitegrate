@@ -802,7 +802,7 @@ static PyObject* PySparseERI_project(PySparseERIObject* self, PyObject* args)
 	PyArrayObject* py_eri_proj = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
 	if (py_eri_proj == NULL) {
 		char msg[1024];
-		sprintf(msg, "error creating NumPy tensor for return value; syntax: %s", syntax);
+		sprintf(msg, "error creating NumPy array for return value; syntax: %s", syntax);
 		PyErr_SetString(PyExc_RuntimeError, msg);
 		Py_DECREF(py_basis);
 		return NULL;
@@ -871,6 +871,69 @@ static PyObject* PySparseERI_fill_tensor(PySparseERIObject* self, PyObject* args
 }
 
 
+static PyObject* PySparseERI_apply(PySparseERIObject* self, PyObject* args)
+{
+	if (self->eri.integral_values == NULL) {
+		PyErr_SetString(PyExc_ValueError, "SparseERI object has not been initialized yet");
+		return NULL;
+	}
+
+	const glong num_points = cartesian_grid_3d_num_points(&self->eri.grid);
+	assert(num_points > 0);
+
+	const glong dim_state = num_points * num_points;
+
+	const char* syntax = "apply(states)";
+
+	// parse input arguments
+	PyObject* py_obj_states;
+	if (!PyArg_ParseTuple(args, "O", &py_obj_states)) {
+		char msg[1024];
+		sprintf(msg, "error parsing input; syntax: %s", syntax);
+		PyErr_SetString(PyExc_SyntaxError, msg);
+		return NULL;
+	}
+
+	// convert input argument to NumPy array
+	PyArrayObject* py_states = (PyArrayObject*)PyArray_ContiguousFromObject(py_obj_states, NPY_DOUBLE, 2, 2);
+	if (py_states == NULL) {
+		char msg[1024];
+		sprintf(msg, "converting input argument to a NumPy array failed; syntax: %s", syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		return NULL;
+	}
+	if (PyArray_DIM(py_states, 0) != dim_state) {
+		char msg[1024];
+		sprintf(msg, "leading dimension of the input state matrix must be equal to the number of grid points squared (%li); syntax: %s", dim_state, syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		Py_DECREF(py_states);
+		return NULL;
+	}
+	const npy_intp num_states = PyArray_DIM(py_states, 1);
+	if (num_states == 0) {
+		char msg[1024];
+		sprintf(msg, "number of input states cannot be zero; syntax: %s", syntax);
+		PyErr_SetString(PyExc_ValueError, msg);
+		Py_DECREF(py_states);
+		return NULL;
+	}
+
+	npy_intp dims[2] = { dim_state, num_states };
+	PyArrayObject* py_eri_states = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+	if (py_eri_states == NULL) {
+		char msg[1024];
+		sprintf(msg, "error creating NumPy array for return value; syntax: %s", syntax);
+		PyErr_SetString(PyExc_RuntimeError, msg);
+		Py_DECREF(py_states);
+		return NULL;
+	}
+
+	apply_sparse_eri_tensor(&self->eri, PyArray_DATA(py_states), num_states, PyArray_DATA(py_eri_states));
+
+	return (PyObject*)py_eri_states;
+}
+
+
 static PyMethodDef PySparseERI_methods[] = {
 	{
 		.ml_name  = "integral_value",
@@ -889,6 +952,12 @@ static PyMethodDef PySparseERI_methods[] = {
 		.ml_meth  = (PyCFunction)PySparseERI_fill_tensor,
 		.ml_flags = METH_VARARGS,
 		.ml_doc   = "Fill the dense electron repulsion integral (ERI) tensor of degree 4 for Gausslet orbitals.",
+	},
+	{
+		.ml_name  = "apply",
+		.ml_meth  = (PyCFunction)PySparseERI_apply,
+		.ml_flags = METH_VARARGS,
+		.ml_doc   = "Apply the electron repulsion integral (ERI) tensor interpreted as a matrix in physicist's convention to a list of states.",
 	},
 	{
 		0  // sentinel
@@ -1423,7 +1492,7 @@ static PyObject* PySparseERIDA_project(PySparseERIDAObject* self, PyObject* args
 	PyArrayObject* py_eri_proj = (PyArrayObject*)PyArray_SimpleNew(4, dims, NPY_DOUBLE);
 	if (py_eri_proj == NULL) {
 		char msg[1024];
-		sprintf(msg, "error creating NumPy tensor for return value; syntax: %s", syntax);
+		sprintf(msg, "error creating NumPy array for return value; syntax: %s", syntax);
 		PyErr_SetString(PyExc_RuntimeError, msg);
 		Py_DECREF(py_basis);
 		return NULL;

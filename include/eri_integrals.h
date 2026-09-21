@@ -58,5 +58,7 @@ void project_sparse_eri_gausslet_integrals(const struct sparse_eri_gausslet_inte
 
 void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_sparse, const struct cartesian_grid_3d* grid_dense, double* eri_tensor);
 
+void apply_sparse_eri_tensor(const struct sparse_eri_gausslet_integrals* eri, const double* states, const glong num_states, double* ret);
+
 
 void delete_sparse_eri_gausslet_integrals(struct sparse_eri_gausslet_integrals* eri);
