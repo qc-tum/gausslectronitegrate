@@ -14,20 +14,23 @@ def apply_two_particle_hamiltonian(kinetic, nuclear, erida, psi):
     Apply a molecular Hamiltonian to a two-particle state
     represented in first quantization convention.
 
+    The spin state is assumed to be a spin singlet or triplet which has been factored out.
+
     Args:
         kinetic: kinetic overlap integrals
         nuclear: nuclear overlap integrals
         erida:   electron repulsion integrals using the integral diagonal approximation
         psi:     spatial wavefunction psi(r1, r2) stored as a vector
 
-    The spin state is assumed to be a spin singlet or triplet which has been factored out.
+    Returns:
+        np.array: wavefunction after applying the Hamiltonian
     """
     # one-body integrals: kinetic energy and nuclear attraction
     h = kinetic - nuclear
-    num_points = h.shape[0]
-    psi = np.reshape(psi, (num_points, num_points))
+    n = h.shape[0]
+    psi = np.reshape(psi, (n, n))
     # one-body terms, and electron repulsion via pointwise multiplication with 'erida' matrix
-    return np.reshape((h @ psi + psi @ h.T) + (erida * psi), num_points**2)
+    return np.reshape((h @ psi + psi @ h.T) + (erida * psi), n**2)
 
 
 def hydrogen_molecule_groundstate_gausslets_erida(
