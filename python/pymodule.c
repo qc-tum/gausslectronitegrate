@@ -895,7 +895,7 @@ static PyObject* PySparseERI_apply(PySparseERIObject* self, PyObject* args)
 	}
 
 	// convert input argument to NumPy array
-	PyArrayObject* py_states = (PyArrayObject*)PyArray_ContiguousFromObject(py_obj_states, NPY_DOUBLE, 2, 2);
+	PyArrayObject* py_states = (PyArrayObject*)PyArray_ContiguousFromObject(py_obj_states, NPY_DOUBLE, 1, 2);
 	if (py_states == NULL) {
 		char msg[1024];
 		sprintf(msg, "converting input argument to a NumPy array failed; syntax: %s", syntax);
@@ -909,7 +909,7 @@ static PyObject* PySparseERI_apply(PySparseERIObject* self, PyObject* args)
 		Py_DECREF(py_states);
 		return NULL;
 	}
-	const npy_intp num_states = PyArray_DIM(py_states, 1);
+	const npy_intp num_states = (PyArray_NDIM(py_states) == 1 ? 1 : PyArray_DIM(py_states, 1));
 	if (num_states == 0) {
 		char msg[1024];
 		sprintf(msg, "number of input states cannot be zero; syntax: %s", syntax);
@@ -919,7 +919,7 @@ static PyObject* PySparseERI_apply(PySparseERIObject* self, PyObject* args)
 	}
 
 	npy_intp dims[2] = { dim_state, num_states };
-	PyArrayObject* py_eri_states = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+	PyArrayObject* py_eri_states = (PyArrayObject*)PyArray_SimpleNew(PyArray_NDIM(py_states), dims, NPY_DOUBLE);
 	if (py_eri_states == NULL) {
 		char msg[1024];
 		sprintf(msg, "error creating NumPy array for return value; syntax: %s", syntax);
