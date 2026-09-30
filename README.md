@@ -6,6 +6,20 @@ Gausslectronitegrate
 
 Computing kinetic, nuclear, and electron repulsion integrals for Gausslet orbitals.
 
+This library is written in C and offers a Python 3 interface for more straightforward accessibility.
+
+
+Examples
+--------
+The [examples](examples/) folder contains several demonstrations of the functionalities, using Jupyter notebooks and the Python interface:
+- [kinetic_integrals](examples/kinetic_integrals.ipynb)
+- [nuclear_integrals](examples/nuclear_integrals.ipynb)
+- [eri_integrals](examples/eri_integrals.ipynb)
+- [erida_integrals](examples/erida_integrals.ipynb)
+- [hydrogen_atom](examples/hydrogen_atom.ipynb)
+- [hydrogen_molecule_eri](examples/hydrogen_molecule_eri.ipynb)
+- [hydrogen_molecule_erida](examples/hydrogen_molecule_erida.ipynb)
+
 
 Building
 --------
@@ -27,6 +41,18 @@ python3 -m build . --wheel
 pip3 install dist/gausslectronitegrate-...whl
 ```
 The first line should run `cmake` in the background and create a Python "wheel" (.whl file) in the `dist/` subfolder. This package file can then be installed locally via the second line.
+
+
+Directory structure
+-------------------
+- **cli**: command-line interface
+- **examples**: examples and demonstrations
+- **gausslets** Gausslet coefficients and function evaluation
+- **include**: include files of the C code
+- **perf**: performance benchmarking
+- **python**: Python interface
+- **src**: C source code
+- **test**: unit tests
 
 
 References
