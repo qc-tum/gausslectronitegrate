@@ -4,7 +4,7 @@
 Gausslectronitegrate
 ====================
 
-Computing kinetic, nuclear, and electron repulsion integrals for Gausslet orbitals.
+Computing kinetic, nuclear, and electron repulsion integrals for Gausslet orbitals, accompanying [arXiv:2609.39176](https://arxiv.org/abs/2609.39176).
 
 This library is written in C and offers a Python 3 interface for more straightforward accessibility.
 
@@ -47,12 +47,28 @@ Directory structure
 -------------------
 - **cli**: command-line interface
 - **examples**: examples and demonstrations
-- **gausslets** Gausslet coefficients and function evaluation
+- **gausslets**: Gausslet coefficients and function evaluation
 - **include**: include files of the C code
 - **perf**: performance benchmarking
 - **python**: Python interface
 - **src**: C source code
 - **test**: unit tests
+
+
+Citing
+------
+Gausslectronitegrate accompanies the following preprint - if it's ever useful for a research project please consider citing it:
+
+```
+@Article{gausslectronitegrate,
+  author  = {Yin, Xianrui and Ghasempour, Fereshteh and Mendl, Christian B.},
+  title   = {Computing electron overlap integrals for Gausslet orbitals on cubic lattices},
+  journal = {arXiv:2609.39176},
+  eprint  = {2609.39176},
+  year    = {2026},
+  doi     = {10.48550/arXiv.2609.39176},
+}
+```
 
 
 References
