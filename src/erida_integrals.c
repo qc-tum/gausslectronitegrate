@@ -240,7 +240,7 @@ glong minimum_octahedral_orbit_erida_tensor_index(const glong num_points, const 
 /// the minimal combined index tuple (i, j) appearing within the octahedral group orbit
 /// and i <-> j permutation symmetry.
 ///
-static inline bool is_minimum_octahedral_orbit_erida_tensor_index(
+static inline bool is_lower_bound_octahedral_orbit_erida_tensor_index(
 	const glong num_points, const glong* octahedral_perm[48],
 	const glong i, const glong j, const glong index)
 {
@@ -320,12 +320,10 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 			}
 
 			// exploit translational invariance
-			{
-				// x-coordinate of orbital box center times 2
-				const glong center_x = 2 * grid->coord_range[0].istart + icx + jcx;
-				if (center_x < -1 || 1 < center_x) {
-					continue;
-				}
+			// x-coordinate of orbital box center times 2
+			const glong center_x = 2 * grid->coord_range[0].istart + icx + jcx;
+			if (center_x < -1 || 1 < center_x) {
+				continue;
 			}
 
 			for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
@@ -333,12 +331,10 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 				for (glong jcy = 0; jcy < grid->coord_range[1].num; ++jcy)
 				{
 					// exploit translational invariance
-					{
-						// y-coordinate of orbital box center times 2
-						const glong center_y = 2 * grid->coord_range[1].istart + icy + jcy;
-						if (center_y < -1 || 1 < center_y) {
-							continue;
-						}
+					// y-coordinate of orbital box center times 2
+					const glong center_y = 2 * grid->coord_range[1].istart + icy + jcy;
+					if (center_y < -1 || 1 < center_y) {
+						continue;
 					}
 
 					for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
@@ -346,21 +342,37 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 						for (glong jcz = 0; jcz < grid->coord_range[2].num; ++jcz)
 						{
 							// exploit translational invariance
-							{
-								// z-coordinate of orbital box center times 2
-								const glong center_z = 2 * grid->coord_range[2].istart + icz + jcz;
-								if (center_z < -1 || 1 < center_z) {
-									continue;
-								}
+							// z-coordinate of orbital box center times 2
+							const glong center_z = 2 * grid->coord_range[2].istart + icz + jcz;
+							if (center_z < -1 || 1 < center_z) {
+								continue;
 							}
 
-							const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
-							const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
+							const glong idx_tensor =
+								  cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz) * num_points
+								+ cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
 
-							const glong idx_tensor = idx_i * num_points + idx_j;
+							bool is_minimal_index = true;
+							// bias shifts of bounding box center
+							for (glong bx = 0; bx <= labs(center_x); ++bx)
+							{
+								for (glong by = 0; by <= labs(center_y); ++by)
+								{
+									for (glong bz = 0; bz <= labs(center_z); ++bz)
+									{
+										const glong idx_biased_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx - bx*center_x, icy - by*center_y, icz - bz*center_z);
+										const glong idx_biased_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx - bx*center_x, jcy - by*center_y, jcz - bz*center_z);
 
-							// use point group and permutation symmetries to avoid redundant calculations
-							if (is_minimum_octahedral_orbit_erida_tensor_index(num_points, (const glong**)octahedral_perm, idx_i, idx_j, idx_tensor))
+										// use point group and permutation symmetries to avoid redundant calculations
+										if (!is_lower_bound_octahedral_orbit_erida_tensor_index(num_points, (const glong**)octahedral_perm, idx_biased_i, idx_biased_j, idx_tensor))
+										{
+											is_minimal_index = false;
+											break;
+										}
+									}
+								}
+							}
+							if (is_minimal_index)
 							{
 								#pragma omp critical
 								{
@@ -579,8 +591,9 @@ void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_
 		{
 			// x-coordinate of orbital box center times 2
 			const glong center_x = 2 * erida->grid.coord_range[0].istart + icx + jcx;
-			const glong trans_x = center_x / 2;
-			assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+			const glong trans_x  = center_x / 2;
+			const glong bias_x   = center_x - 2 * trans_x;
+			assert(-1 <= bias_x && bias_x <= 1);
 
 			for (glong icy = 0; icy < erida->grid.coord_range[1].num; ++icy)
 			{
@@ -588,8 +601,9 @@ void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_
 				{
 					// y-coordinate of orbital box center times 2
 					const glong center_y = 2 * erida->grid.coord_range[1].istart + icy + jcy;
-					const glong trans_y = center_y / 2;
-					assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+					const glong trans_y  = center_y / 2;
+					const glong bias_y   = center_y - 2 * trans_y;
+					assert(-1 <= bias_y && bias_y <= 1);
 
 					for (glong icz = 0; icz < erida->grid.coord_range[2].num; ++icz)
 					{
@@ -597,17 +611,33 @@ void project_sparse_erida_gausslet_integrals(const struct sparse_erida_gausslet_
 						{
 							// z-coordinate of orbital box center times 2
 							const glong center_z = 2 * erida->grid.coord_range[2].istart + icz + jcz;
-							const glong trans_z = center_z / 2;
-							assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+							const glong trans_z  = center_z / 2;
+							const glong bias_z   = center_z - 2 * trans_z;
+							assert(-1 <= bias_z && bias_z <= 1);
 
 							const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, icx, icy, icz);
 							const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, jcx, jcy, jcz);
 
-							const glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, icx - trans_x, icy - trans_y, icz - trans_z);
-							const glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid, jcx - trans_x, jcy - trans_y, jcz - trans_z);
-							const glong idx_tensor_sparse = minimum_octahedral_orbit_erida_tensor_index(
-								num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p);
+							glong idx_tensor_sparse = GLONG_MAX;
+							for (glong bx = 0; bx <= labs(bias_x); ++bx)
+							{
+								for (glong by = 0; by <= labs(bias_y); ++by)
+								{
+									for (glong bz = 0; bz <= labs(bias_z); ++bz)
+									{
+										const glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid,
+											icx - trans_x - bx*bias_x,
+											icy - trans_y - by*bias_y,
+											icz - trans_z - bz*bias_z);
+										const glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&erida->grid,
+											jcx - trans_x - bx*bias_x,
+											jcy - trans_y - by*bias_y,
+											jcz - trans_z - bz*bias_z);
 
+										idx_tensor_sparse = lmin(idx_tensor_sparse, minimum_octahedral_orbit_erida_tensor_index(num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p));
+									}
+								}
+							}
 							const double val = sparse_erida_gausslet_integrals_get_value(erida, idx_tensor_sparse);
 
 							for (glong p = 0; p < num_states; ++p)
@@ -664,8 +694,9 @@ void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida
 		{
 			// x-coordinate of orbital box center times 2
 			const glong center_x = 2 * grid_dense->coord_range[0].istart + icx + jcx;
-			const glong trans_x = center_x / 2;
-			assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+			const glong trans_x  = center_x / 2;
+			const glong bias_x   = center_x - 2 * trans_x;
+			assert(-1 <= bias_x && bias_x <= 1);
 
 			for (glong icy = 0; icy < grid_dense->coord_range[1].num; ++icy)
 			{
@@ -673,8 +704,9 @@ void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida
 				{
 					// y-coordinate of orbital box center times 2
 					const glong center_y = 2 * grid_dense->coord_range[1].istart + icy + jcy;
-					const glong trans_y = center_y / 2;
-					assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+					const glong trans_y  = center_y / 2;
+					const glong bias_y   = center_y - 2 * trans_y;
+					assert(-1 <= bias_y && bias_y <= 1);
 
 					for (glong icz = 0; icz < grid_dense->coord_range[2].num; ++icz)
 					{
@@ -682,26 +714,39 @@ void fill_dense_erida_matrix(const struct sparse_erida_gausslet_integrals* erida
 						{
 							// z-coordinate of orbital box center times 2
 							const glong center_z = 2 * grid_dense->coord_range[2].istart + icz + jcz;
-							const glong trans_z = center_z / 2;
-							assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+							const glong trans_z  = center_z / 2;
+							const glong bias_z   = center_z - 2 * trans_z;
+							assert(-1 <= bias_z && bias_z <= 1);
 
-							const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, icx, icy, icz);
-							const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, jcx, jcy, jcz);
-							const glong idx_tensor_dense  = idx_i * num_points_dense + idx_j;
+							const glong idx_tensor_dense =
+								  cartesian_grid_3d_cartesian_to_linear_index(grid_dense, icx, icy, icz) * num_points_dense
+								+ cartesian_grid_3d_cartesian_to_linear_index(grid_dense, jcx, jcy, jcz);
 
-							const union cartesian_grid_point_3d pt_i_p = {
-								.x = grid_dense->coord_range[0].istart + icx - trans_x,
-								.y = grid_dense->coord_range[1].istart + icy - trans_y,
-								.z = grid_dense->coord_range[2].istart + icz - trans_z,
-							};
-							const union cartesian_grid_point_3d pt_j_p = {
-								.x = grid_dense->coord_range[0].istart + jcx - trans_x,
-								.y = grid_dense->coord_range[1].istart + jcy - trans_y,
-								.z = grid_dense->coord_range[2].istart + jcz - trans_z,
-							};
-							const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&erida_sparse->grid, &pt_i_p);
-							const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&erida_sparse->grid, &pt_j_p);
-							const glong idx_tensor_sparse = minimum_octahedral_orbit_erida_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p);
+							glong idx_tensor_sparse = GLONG_MAX;
+							for (glong bx = 0; bx <= labs(bias_x); ++bx)
+							{
+								for (glong by = 0; by <= labs(bias_y); ++by)
+								{
+									for (glong bz = 0; bz <= labs(bias_z); ++bz)
+									{
+										const union cartesian_grid_point_3d pt_i_p = {
+											.x = grid_dense->coord_range[0].istart + icx - trans_x - bx*bias_x,
+											.y = grid_dense->coord_range[1].istart + icy - trans_y - by*bias_y,
+											.z = grid_dense->coord_range[2].istart + icz - trans_z - bz*bias_z,
+										};
+										const union cartesian_grid_point_3d pt_j_p = {
+											.x = grid_dense->coord_range[0].istart + jcx - trans_x - bx*bias_x,
+											.y = grid_dense->coord_range[1].istart + jcy - trans_y - by*bias_y,
+											.z = grid_dense->coord_range[2].istart + jcz - trans_z - bz*bias_z,
+										};
+
+										const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&erida_sparse->grid, &pt_i_p);
+										const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&erida_sparse->grid, &pt_j_p);
+
+										idx_tensor_sparse = lmin(idx_tensor_sparse, minimum_octahedral_orbit_erida_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p));
+									}
+								}
+							}
 
 							erida_matrix[idx_tensor_dense] = sparse_erida_gausslet_integrals_get_value(erida_sparse, idx_tensor_sparse);
 						}

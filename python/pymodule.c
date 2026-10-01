@@ -1402,13 +1402,15 @@ static PyObject* PySparseERIDA_integral_value(PySparseERIDAObject* self, PyObjec
 	assert(num_points > 0);
 
 	// shift orbital box center to origin
+	union cartesian_grid_point_3d bias;
 	for (int i = 0; i < 3; ++i)
 	{
 		// i-th coordinate of orbital box center times 2
 		const glong center = lmin(grid_points[0].c[i], grid_points[1].c[i]) +
 		                     lmax(grid_points[0].c[i], grid_points[1].c[i]);
 		const glong trans = center / 2;
-		assert(-1 <= center - 2 * trans && center - 2 * trans <= 1);
+		bias.c[i] = center - 2 * trans;
+		assert(-1 <= bias.c[i] && bias.c[i] <= 1);
 		grid_points[0].c[i] -= trans;
 		grid_points[1].c[i] -= trans;
 	}
@@ -1431,9 +1433,30 @@ static PyObject* PySparseERIDA_integral_value(PySparseERIDAObject* self, PyObjec
 		}
 	}
 
-	const glong idx0 = cartesian_grid_point_3d_to_linear_index(&self->erida.grid, &grid_points[0]);
-	const glong idx1 = cartesian_grid_point_3d_to_linear_index(&self->erida.grid, &grid_points[1]);
-	const glong idx_tensor = minimum_octahedral_orbit_erida_tensor_index(num_points, (const glong**)self->octahedral_perm, idx0, idx1);
+	glong idx_tensor = GLONG_MAX;
+	for (glong bx = 0; bx <= labs(bias.x); ++bx)
+	{
+		for (glong by = 0; by <= labs(bias.y); ++by)
+		{
+			for (glong bz = 0; bz <= labs(bias.z); ++bz)
+			{
+				const union cartesian_grid_point_3d pt_i_p = {
+					.x = grid_points[0].x - bx*bias.x,
+					.y = grid_points[0].y - by*bias.y,
+					.z = grid_points[0].z - bz*bias.z,
+				};
+				const union cartesian_grid_point_3d pt_j_p = {
+					.x = grid_points[1].x - bx*bias.x,
+					.y = grid_points[1].y - by*bias.y,
+					.z = grid_points[1].z - bz*bias.z,
+				};
+				const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&self->erida.grid, &pt_i_p);
+				const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&self->erida.grid, &pt_j_p);
+
+				idx_tensor = lmin(idx_tensor, minimum_octahedral_orbit_erida_tensor_index(num_points, (const glong**)self->octahedral_perm, idx_i_p, idx_j_p));
+			}
+		}
+	}
 
 	const double value = sparse_erida_gausslet_integrals_get_value(&self->erida, idx_tensor);
 

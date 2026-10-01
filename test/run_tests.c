@@ -19,7 +19,9 @@ char* test_grid_permutation();
 char* test_kinetic_integrals();
 char* test_nuclear_integrals();
 char* test_eri_integrals();
-char* test_erida_integrals();
+char* test_erida_integral_values();
+char* test_project_erida_integrals();
+char* test_erida_integral_sparse_completeness();
 
 
 #define TEST_FUNCTION_ENTRY(fname) { .func = fname, .name = #fname }
@@ -39,7 +41,9 @@ int main()
 		TEST_FUNCTION_ENTRY(test_kinetic_integrals),
 		TEST_FUNCTION_ENTRY(test_nuclear_integrals),
 		TEST_FUNCTION_ENTRY(test_eri_integrals),
-		TEST_FUNCTION_ENTRY(test_erida_integrals),
+		TEST_FUNCTION_ENTRY(test_erida_integral_values),
+		TEST_FUNCTION_ENTRY(test_project_erida_integrals),
+		TEST_FUNCTION_ENTRY(test_erida_integral_sparse_completeness),
 	};
 	int num_tests = sizeof(tests) / sizeof(tests[0]);
 
