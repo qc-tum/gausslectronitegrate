@@ -152,9 +152,9 @@ char* test_project_eri_integrals()
 		// ensure that grid for sparse tensor is symmetrically centered around the origin
 		const struct cartesian_grid_3d grid_sparse = {
 			.coord_range = {
-				{ .istart = -2, .num = 5 },
-				{ .istart = -2, .num = 5 },
-				{ .istart = -2, .num = 5 },
+				{ .istart = -1, .num = 3 },
+				{ .istart = -1, .num = 3 },
+				{ .istart = -1, .num = 3 },
 			}
 		};
 
@@ -176,7 +176,7 @@ char* test_project_eri_integrals()
 	const glong num_points = cartesian_grid_3d_num_points(&eri_sparse.grid);
 
 	// define basis
-	const glong num_states = 3;
+	const glong num_states = 4;
 	double* basis = aligned_malloc(num_points * num_states * sizeof(basis[0]));
 	// fill basis states with pseudo-random entries
 	for (glong i = 0; i < num_points * num_states; ++i) {
@@ -278,7 +278,6 @@ char* test_apply_eri_integrals()
 
 		H5Fclose(file);
 	}
-
 
 	// apply ERI tensor to two-particle states
 
