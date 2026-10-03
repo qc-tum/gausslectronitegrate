@@ -360,6 +360,10 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 								{
 									for (glong bz = 0; bz <= labs(center_z); ++bz)
 									{
+										if (!is_minimal_index) {
+											continue;
+										}
+
 										const glong idx_biased_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx - bx*center_x, icy - by*center_y, icz - bz*center_z);
 										const glong idx_biased_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx - bx*center_x, jcy - by*center_y, jcz - bz*center_z);
 
@@ -367,7 +371,6 @@ void enumerate_symmetry_reduced_erida_indices(const struct cartesian_grid_3d* gr
 										if (!is_lower_bound_octahedral_orbit_erida_tensor_index(num_points, (const glong**)octahedral_perm, idx_biased_i, idx_biased_j, idx_tensor))
 										{
 											is_minimal_index = false;
-											break;
 										}
 									}
 								}

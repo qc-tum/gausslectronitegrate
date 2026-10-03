@@ -57,7 +57,7 @@ Directory structure
 
 Citing
 ------
-Gausslectronitegrate accompanies the following preprint - if it's ever useful for a research project please consider citing it:
+Gausslectronitegrate accompanies the following preprint - if it's ever useful for a research project, please consider citing it:
 
 ```
 @Article{gausslectronitegrate,

@@ -10,7 +10,7 @@ char* test_erida_integral_values()
 {
 	hid_t file = H5Fopen("../test/data/test_erida_integrals.hdf5", H5F_ACC_RDONLY, H5P_DEFAULT);
 	if (file < 0) {
-		return "'H5Fopen' in test_erida_integrals failed";
+		return "'H5Fopen' in test_erida_integral_values failed";
 	}
 
 	struct gausslet_data gdata;
@@ -51,8 +51,11 @@ char* test_erida_integral_values()
 		enumerate_symmetry_reduced_erida_indices(&grid_sparse, &erida_indices);
 
 		compute_sparse_erida_gausslet_integrals(&gdata, &grid_sparse, erida_indices.two_indices, erida_indices.num, tol, &erida_sparse);
+
 		delete_sparse_erida_indices(&erida_indices);
 	}
+
+	// reconstruct full matrix on another grid
 
 	const struct cartesian_grid_3d grid_dense = {
 		.coord_range = {
@@ -62,7 +65,6 @@ char* test_erida_integral_values()
 		}
 	};
 
-	// reconstruct full tensor
 	const glong num_points_dense = cartesian_grid_3d_num_points(&grid_dense);
 	const glong num_entries_dense = num_points_dense * num_points_dense;
 	double* erida_matrix = aligned_malloc(num_entries_dense * sizeof(erida_matrix[0]));
@@ -113,7 +115,7 @@ char* test_project_erida_integrals()
 	{
 		hid_t file = H5Fopen("../test/data/test_erida_integrals.hdf5", H5F_ACC_RDONLY, H5P_DEFAULT);
 		if (file < 0) {
-			return "'H5Fopen' in test_erida_integrals failed";
+			return "'H5Fopen' in test_project_erida_integrals failed";
 		}
 
 		struct gausslet_data gdata;
@@ -149,8 +151,8 @@ char* test_project_erida_integrals()
 		const double tol = 1e-5;
 
 		compute_sparse_erida_gausslet_integrals(&gdata, &grid, erida_indices.two_indices, erida_indices.num, tol, &erida_sparse);
-		delete_sparse_erida_indices(&erida_indices);
 
+		delete_sparse_erida_indices(&erida_indices);
 		aligned_free(gdata.coefficients);
 
 		H5Fclose(file);
@@ -230,7 +232,7 @@ char* test_erida_integral_sparse_completeness()
 	{
 		hid_t file = H5Fopen("../test/data/test_erida_integrals.hdf5", H5F_ACC_RDONLY, H5P_DEFAULT);
 		if (file < 0) {
-			return "'H5Fopen' in test_erida_integrals failed";
+			return "'H5Fopen' in test_erida_integral_sparse_completeness failed";
 		}
 
 		struct gausslet_data gdata;
@@ -266,8 +268,8 @@ char* test_erida_integral_sparse_completeness()
 		enumerate_symmetry_reduced_erida_indices(&grid, &erida_indices);
 
 		compute_sparse_erida_gausslet_integrals(&gdata, &grid, erida_indices.two_indices, erida_indices.num, tol, &erida_sparse);
-		delete_sparse_erida_indices(&erida_indices);
 
+		delete_sparse_erida_indices(&erida_indices);
 		aligned_free(gdata.coefficients);
 
 		H5Fclose(file);

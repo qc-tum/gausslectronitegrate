@@ -297,7 +297,7 @@ glong minimum_octahedral_orbit_eri_tensor_index(
 /// the minimal combined 4-index appearing within the octahedral group orbit
 /// and i <-> j, k <-> l, (i, j) <-> (k, l) permutation symmetry.
 ///
-static inline bool is_minimum_octahedral_orbit_eri_tensor_index(
+static inline bool is_lower_bound_octahedral_orbit_eri_tensor_index(
 	const glong num_points, const glong* octahedral_perm[48],
 	const glong i, const glong j, const glong k, const glong l,
 	const glong index)
@@ -415,13 +415,11 @@ void enumerate_symmetry_reduced_eri_indices(const struct cartesian_grid_3d* grid
 					}
 
 					// exploit translational invariance
-					{
-						// x-coordinate of orbital box center times 2
-						const glong center_x = 2 * grid->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
-						                                                         lmax(lmax(lmax(icx, jcx), kcx), lcx);
-						if (center_x < -1 || 1 < center_x) {
-							continue;
-						}
+					// x-coordinate of orbital box center times 2
+					const glong center_x = 2 * grid->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
+					                                                         lmax(lmax(lmax(icx, jcx), kcx), lcx);
+					if (center_x < -1 || 1 < center_x) {
+						continue;
 					}
 
 					for (glong icy = 0; icy < grid->coord_range[1].num; ++icy)
@@ -433,13 +431,11 @@ void enumerate_symmetry_reduced_eri_indices(const struct cartesian_grid_3d* grid
 								for (glong lcy = 0; lcy < grid->coord_range[1].num; ++lcy)
 								{
 									// exploit translational invariance
-									{
-										// y-coordinate of orbital box center times 2
-										const glong center_y = 2 * grid->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
-										                                                         lmax(lmax(lmax(icy, jcy), kcy), lcy);
-										if (center_y < -1 || 1 < center_y) {
-											continue;
-										}
+									// y-coordinate of orbital box center times 2
+									const glong center_y = 2 * grid->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
+									                                                         lmax(lmax(lmax(icy, jcy), kcy), lcy);
+									if (center_y < -1 || 1 < center_y) {
+										continue;
 									}
 
 									for (glong icz = 0; icz < grid->coord_range[2].num; ++icz)
@@ -451,24 +447,45 @@ void enumerate_symmetry_reduced_eri_indices(const struct cartesian_grid_3d* grid
 												for (glong lcz = 0; lcz < grid->coord_range[2].num; ++lcz)
 												{
 													// exploit translational invariance
-													{
-														// z-coordinate of orbital box center times 2
-														const glong center_z = 2 * grid->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
-														                                                         lmax(lmax(lmax(icz, jcz), kcz), lcz);
-														if (center_z < -1 || 1 < center_z) {
-															continue;
-														}
+													// z-coordinate of orbital box center times 2
+													const glong center_z = 2 * grid->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
+													                                                         lmax(lmax(lmax(icz, jcz), kcz), lcz);
+													if (center_z < -1 || 1 < center_z) {
+														continue;
 													}
 
 													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx, icy, icz);
 													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx, jcy, jcz);
 													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx, kcy, kcz);
 													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx, lcy, lcz);
-
 													const glong idx_tensor = ((idx_i * num_points + idx_j) * num_points + idx_k) * num_points + idx_l;
 
-													// use point group and permutation symmetries to avoid redundant calculations
-													if (is_minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i, idx_j, idx_k, idx_l, idx_tensor))
+													bool is_minimal_index = true;
+													// bias shifts of bounding box center
+													for (glong bx = 0; bx <= labs(center_x); ++bx)
+													{
+														for (glong by = 0; by <= labs(center_y); ++by)
+														{
+															for (glong bz = 0; bz <= labs(center_z); ++bz)
+															{
+																if (!is_minimal_index) {
+																	continue;
+																}
+
+																const glong idx_biased_i = cartesian_grid_3d_cartesian_to_linear_index(grid, icx - bx*center_x, icy - by*center_y, icz - bz*center_z);
+																const glong idx_biased_j = cartesian_grid_3d_cartesian_to_linear_index(grid, jcx - bx*center_x, jcy - by*center_y, jcz - bz*center_z);
+																const glong idx_biased_k = cartesian_grid_3d_cartesian_to_linear_index(grid, kcx - bx*center_x, kcy - by*center_y, kcz - bz*center_z);
+																const glong idx_biased_l = cartesian_grid_3d_cartesian_to_linear_index(grid, lcx - bx*center_x, lcy - by*center_y, lcz - bz*center_z);
+
+																// use point group and permutation symmetries to avoid redundant calculations
+																if (!is_lower_bound_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_biased_i, idx_biased_j, idx_biased_k, idx_biased_l, idx_tensor))
+																{
+																	is_minimal_index = false;
+																}
+															}
+														}
+													}
+													if (is_minimal_index)
 													{
 														#pragma omp critical
 														{
@@ -716,8 +733,9 @@ void project_sparse_eri_gausslet_integrals(const struct sparse_eri_gausslet_inte
 					// x-coordinate of orbital box center times 2
 					const glong center_x = 2 * eri->grid.coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
 					                                                             lmax(lmax(lmax(icx, jcx), kcx), lcx);
-					const glong trans_x = center_x / 2;
-					assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+					const glong trans_x  = center_x / 2;
+					const glong bias_x   = center_x - 2 * trans_x;
+					assert(-1 <= bias_x && bias_x <= 1);
 
 					for (glong icy = 0; icy < eri->grid.coord_range[1].num; ++icy)
 					{
@@ -730,8 +748,9 @@ void project_sparse_eri_gausslet_integrals(const struct sparse_eri_gausslet_inte
 									// y-coordinate of orbital box center times 2
 									const glong center_y = 2 * eri->grid.coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
 									                                                             lmax(lmax(lmax(icy, jcy), kcy), lcy);
-									const glong trans_y = center_y / 2;
-									assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+									const glong trans_y  = center_y / 2;
+									const glong bias_y   = center_y - 2 * trans_y;
+									assert(-1 <= bias_y && bias_y <= 1);
 
 									for (glong icz = 0; icz < eri->grid.coord_range[2].num; ++icz)
 									{
@@ -744,20 +763,44 @@ void project_sparse_eri_gausslet_integrals(const struct sparse_eri_gausslet_inte
 													// z-coordinate of orbital box center times 2
 													const glong center_z = 2 * eri->grid.coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
 													                                                             lmax(lmax(lmax(icz, jcz), kcz), lcz);
-													const glong trans_z = center_z / 2;
-													assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+													const glong trans_z  = center_z / 2;
+													const glong bias_z   = center_z - 2 * trans_z;
+													assert(-1 <= bias_z && bias_z <= 1);
 
 													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx, icy, icz);
 													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx, jcy, jcz);
 													const glong idx_k = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx, kcy, kcz);
 													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx, lcy, lcz);
 
-													const glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx - trans_x, icy - trans_y, icz - trans_z);
-													const glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx - trans_x, jcy - trans_y, jcz - trans_z);
-													const glong idx_k_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, kcx - trans_x, kcy - trans_y, kcz - trans_z);
-													const glong idx_l_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, lcx - trans_x, lcy - trans_y, lcz - trans_z);
-													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(
-														num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
+													glong idx_tensor_sparse = GLONG_MAX;
+													for (glong bx = 0; bx <= labs(bias_x); ++bx)
+													{
+														for (glong by = 0; by <= labs(bias_y); ++by)
+														{
+															for (glong bz = 0; bz <= labs(bias_z); ++bz)
+															{
+																const glong idx_i_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid,
+																	icx - trans_x - bx*bias_x,
+																	icy - trans_y - by*bias_y,
+																	icz - trans_z - bz*bias_z);
+																const glong idx_j_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid,
+																	jcx - trans_x - bx*bias_x,
+																	jcy - trans_y - by*bias_y,
+																	jcz - trans_z - bz*bias_z);
+																const glong idx_k_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid,
+																	kcx - trans_x - bx*bias_x,
+																	kcy - trans_y - by*bias_y,
+																	kcz - trans_z - bz*bias_z);
+																const glong idx_l_p = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid,
+																	lcx - trans_x - bx*bias_x,
+																	lcy - trans_y - by*bias_y,
+																	lcz - trans_z - bz*bias_z);
+
+																idx_tensor_sparse = lmin(idx_tensor_sparse, minimum_octahedral_orbit_eri_tensor_index(
+																	num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p));
+															}
+														}
+													}
 
 													const double val = sparse_eri_gausslet_integrals_get_value(eri, idx_tensor_sparse);
 
@@ -826,8 +869,9 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_spars
 					// x-coordinate of orbital box center times 2
 					const glong center_x = 2 * grid_dense->coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
 					                                                               lmax(lmax(lmax(icx, jcx), kcx), lcx);
-					const glong trans_x = center_x / 2;
-					assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+					const glong trans_x  = center_x / 2;
+					const glong bias_x   = center_x - 2 * trans_x;
+					assert(-1 <= bias_x && bias_x <= 1);
 
 					for (glong icy = 0; icy < grid_dense->coord_range[1].num; ++icy)
 					{
@@ -840,8 +884,9 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_spars
 									// y-coordinate of orbital box center times 2
 									const glong center_y = 2 * grid_dense->coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
 									                                                               lmax(lmax(lmax(icy, jcy), kcy), lcy);
-									const glong trans_y = center_y / 2;
-									assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+									const glong trans_y  = center_y / 2;
+									const glong bias_y   = center_y - 2 * trans_y;
+									assert(-1 <= bias_y && bias_y <= 1);
 
 									for (glong icz = 0; icz < grid_dense->coord_range[2].num; ++icz)
 									{
@@ -854,8 +899,9 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_spars
 													// z-coordinate of orbital box center times 2
 													const glong center_z = 2 * grid_dense->coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
 													                                                               lmax(lmax(lmax(icz, jcz), kcz), lcz);
-													const glong trans_z = center_z / 2;
-													assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+													const glong trans_z  = center_z / 2;
+													const glong bias_z   = center_z - 2 * trans_z;
+													assert(-1 <= bias_z && bias_z <= 1);
 
 													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, icx, icy, icz);
 													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, jcx, jcy, jcz);
@@ -863,31 +909,43 @@ void fill_dense_eri_tensor(const struct sparse_eri_gausslet_integrals* eri_spars
 													const glong idx_l = cartesian_grid_3d_cartesian_to_linear_index(grid_dense, lcx, lcy, lcz);
 													const glong idx_tensor_dense  = ((idx_i * num_points_dense + idx_j) * num_points_dense + idx_k) * num_points_dense + idx_l;
 
-													const union cartesian_grid_point_3d pt_i_p = {
-														.x = grid_dense->coord_range[0].istart + icx - trans_x,
-														.y = grid_dense->coord_range[1].istart + icy - trans_y,
-														.z = grid_dense->coord_range[2].istart + icz - trans_z,
-													};
-													const union cartesian_grid_point_3d pt_j_p = {
-														.x = grid_dense->coord_range[0].istart + jcx - trans_x,
-														.y = grid_dense->coord_range[1].istart + jcy - trans_y,
-														.z = grid_dense->coord_range[2].istart + jcz - trans_z,
-													};
-													const union cartesian_grid_point_3d pt_k_p = {
-														.x = grid_dense->coord_range[0].istart + kcx - trans_x,
-														.y = grid_dense->coord_range[1].istart + kcy - trans_y,
-														.z = grid_dense->coord_range[2].istart + kcz - trans_z,
-													};
-													const union cartesian_grid_point_3d pt_l_p = {
-														.x = grid_dense->coord_range[0].istart + lcx - trans_x,
-														.y = grid_dense->coord_range[1].istart + lcy - trans_y,
-														.z = grid_dense->coord_range[2].istart + lcz - trans_z,
-													};
-													const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_i_p);
-													const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_j_p);
-													const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_k_p);
-													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_l_p);
-													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
+													glong idx_tensor_sparse = GLONG_MAX;
+													for (glong bx = 0; bx <= labs(bias_x); ++bx)
+													{
+														for (glong by = 0; by <= labs(bias_y); ++by)
+														{
+															for (glong bz = 0; bz <= labs(bias_z); ++bz)
+															{
+																const union cartesian_grid_point_3d pt_i_p = {
+																	.x = grid_dense->coord_range[0].istart + icx - trans_x - bx*bias_x,
+																	.y = grid_dense->coord_range[1].istart + icy - trans_y - by*bias_y,
+																	.z = grid_dense->coord_range[2].istart + icz - trans_z - bz*bias_z,
+																};
+																const union cartesian_grid_point_3d pt_j_p = {
+																	.x = grid_dense->coord_range[0].istart + jcx - trans_x - bx*bias_x,
+																	.y = grid_dense->coord_range[1].istart + jcy - trans_y - by*bias_y,
+																	.z = grid_dense->coord_range[2].istart + jcz - trans_z - bz*bias_z,
+																};
+																const union cartesian_grid_point_3d pt_k_p = {
+																	.x = grid_dense->coord_range[0].istart + kcx - trans_x - bx*bias_x,
+																	.y = grid_dense->coord_range[1].istart + kcy - trans_y - by*bias_y,
+																	.z = grid_dense->coord_range[2].istart + kcz - trans_z - bz*bias_z,
+																};
+																const union cartesian_grid_point_3d pt_l_p = {
+																	.x = grid_dense->coord_range[0].istart + lcx - trans_x - bx*bias_x,
+																	.y = grid_dense->coord_range[1].istart + lcy - trans_y - by*bias_y,
+																	.z = grid_dense->coord_range[2].istart + lcz - trans_z - bz*bias_z,
+																};
+
+																const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_i_p);
+																const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_j_p);
+																const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_k_p);
+																const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri_sparse->grid, &pt_l_p);
+
+																idx_tensor_sparse = lmin(idx_tensor_sparse, minimum_octahedral_orbit_eri_tensor_index(num_points_sparse, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p));
+															}
+														}
+													}
 
 													eri_tensor[idx_tensor_dense] = sparse_eri_gausslet_integrals_get_value(eri_sparse, idx_tensor_sparse);
 												}
@@ -938,8 +996,9 @@ void apply_sparse_eri_tensor(const struct sparse_eri_gausslet_integrals* eri, co
 					// x-coordinate of orbital box center times 2
 					const glong center_x = 2 * eri->grid.coord_range[0].istart + lmin(lmin(lmin(icx, jcx), kcx), lcx) +
 					                                                             lmax(lmax(lmax(icx, jcx), kcx), lcx);
-					const glong trans_x = center_x / 2;
-					assert(-1 <= center_x - 2 * trans_x && center_x - 2 * trans_x <= 1);
+					const glong trans_x  = center_x / 2;
+					const glong bias_x   = center_x - 2 * trans_x;
+					assert(-1 <= bias_x && bias_x <= 1);
 
 					for (glong icy = 0; icy < eri->grid.coord_range[1].num; ++icy)
 					{
@@ -952,8 +1011,9 @@ void apply_sparse_eri_tensor(const struct sparse_eri_gausslet_integrals* eri, co
 									// y-coordinate of orbital box center times 2
 									const glong center_y = 2 * eri->grid.coord_range[1].istart + lmin(lmin(lmin(icy, jcy), kcy), lcy) +
 									                                                             lmax(lmax(lmax(icy, jcy), kcy), lcy);
-									const glong trans_y = center_y / 2;
-									assert(-1 <= center_y - 2 * trans_y && center_y - 2 * trans_y <= 1);
+									const glong trans_y  = center_y / 2;
+									const glong bias_y   = center_y - 2 * trans_y;
+									assert(-1 <= bias_y && bias_y <= 1);
 
 									for (glong icz = 0; icz < eri->grid.coord_range[2].num; ++icz)
 									{
@@ -966,8 +1026,9 @@ void apply_sparse_eri_tensor(const struct sparse_eri_gausslet_integrals* eri, co
 													// z-coordinate of orbital box center times 2
 													const glong center_z = 2 * eri->grid.coord_range[2].istart + lmin(lmin(lmin(icz, jcz), kcz), lcz) +
 													                                                             lmax(lmax(lmax(icz, jcz), kcz), lcz);
-													const glong trans_z = center_z / 2;
-													assert(-1 <= center_z - 2 * trans_z && center_z - 2 * trans_z <= 1);
+													const glong trans_z  = center_z / 2;
+													const glong bias_z   = center_z - 2 * trans_z;
+													assert(-1 <= bias_z && bias_z <= 1);
 
 													const glong idx_i = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, icx, icy, icz);
 													const glong idx_j = cartesian_grid_3d_cartesian_to_linear_index(&eri->grid, jcx, jcy, jcz);
@@ -977,31 +1038,42 @@ void apply_sparse_eri_tensor(const struct sparse_eri_gausslet_integrals* eri, co
 													const glong idx_ik = idx_i * num_points + idx_k;
 													const glong idx_jl = idx_j * num_points + idx_l;
 
-													const union cartesian_grid_point_3d pt_i_p = {
-														.x = eri->grid.coord_range[0].istart + icx - trans_x,
-														.y = eri->grid.coord_range[1].istart + icy - trans_y,
-														.z = eri->grid.coord_range[2].istart + icz - trans_z,
-													};
-													const union cartesian_grid_point_3d pt_j_p = {
-														.x = eri->grid.coord_range[0].istart + jcx - trans_x,
-														.y = eri->grid.coord_range[1].istart + jcy - trans_y,
-														.z = eri->grid.coord_range[2].istart + jcz - trans_z,
-													};
-													const union cartesian_grid_point_3d pt_k_p = {
-														.x = eri->grid.coord_range[0].istart + kcx - trans_x,
-														.y = eri->grid.coord_range[1].istart + kcy - trans_y,
-														.z = eri->grid.coord_range[2].istart + kcz - trans_z,
-													};
-													const union cartesian_grid_point_3d pt_l_p = {
-														.x = eri->grid.coord_range[0].istart + lcx - trans_x,
-														.y = eri->grid.coord_range[1].istart + lcy - trans_y,
-														.z = eri->grid.coord_range[2].istart + lcz - trans_z,
-													};
-													const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_i_p);
-													const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_j_p);
-													const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_k_p);
-													const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_l_p);
-													const glong idx_tensor_sparse = minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p);
+													glong idx_tensor_sparse = GLONG_MAX;
+													for (glong bx = 0; bx <= labs(bias_x); ++bx)
+													{
+														for (glong by = 0; by <= labs(bias_y); ++by)
+														{
+															for (glong bz = 0; bz <= labs(bias_z); ++bz)
+															{
+																const union cartesian_grid_point_3d pt_i_p = {
+																	.x = eri->grid.coord_range[0].istart + icx - trans_x - bx*bias_x,
+																	.y = eri->grid.coord_range[1].istart + icy - trans_y - by*bias_y,
+																	.z = eri->grid.coord_range[2].istart + icz - trans_z - bz*bias_z,
+																};
+																const union cartesian_grid_point_3d pt_j_p = {
+																	.x = eri->grid.coord_range[0].istart + jcx - trans_x - bx*bias_x,
+																	.y = eri->grid.coord_range[1].istart + jcy - trans_y - by*bias_y,
+																	.z = eri->grid.coord_range[2].istart + jcz - trans_z - bz*bias_z,
+																};
+																const union cartesian_grid_point_3d pt_k_p = {
+																	.x = eri->grid.coord_range[0].istart + kcx - trans_x - bx*bias_x,
+																	.y = eri->grid.coord_range[1].istart + kcy - trans_y - by*bias_y,
+																	.z = eri->grid.coord_range[2].istart + kcz - trans_z - bz*bias_z,
+																};
+																const union cartesian_grid_point_3d pt_l_p = {
+																	.x = eri->grid.coord_range[0].istart + lcx - trans_x - bx*bias_x,
+																	.y = eri->grid.coord_range[1].istart + lcy - trans_y - by*bias_y,
+																	.z = eri->grid.coord_range[2].istart + lcz - trans_z - bz*bias_z,
+																};
+																const glong idx_i_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_i_p);
+																const glong idx_j_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_j_p);
+																const glong idx_k_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_k_p);
+																const glong idx_l_p = cartesian_grid_point_3d_to_linear_index(&eri->grid, &pt_l_p);
+
+																idx_tensor_sparse = lmin(idx_tensor_sparse, minimum_octahedral_orbit_eri_tensor_index(num_points, (const glong**)octahedral_perm, idx_i_p, idx_j_p, idx_k_p, idx_l_p));
+															}
+														}
+													}
 
 													const double val = sparse_eri_gausslet_integrals_get_value(eri, idx_tensor_sparse);
 
